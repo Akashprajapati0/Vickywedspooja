@@ -1,0 +1,65 @@
+/**
+ * Shared music control for the demo invitations.
+ *  - A template that already has its own music button keeps it (no duplicate); shared-music.css only moves it to the left edge.
+ *  - A template with background music but no button gets a small play/pause button on the left.
+ * The music is whatever <audio> the template already carries (the invitation's configured track). Browsers that block autoplay
+ * simply leave the button on "play" until the visitor taps it.
+ */
+(function () {
+  'use strict';
+  var BUTTONS = '#musicToggle,#musicBtn,.music-toggle,.music-btn,.music-orb,.pd-music,.siyaram-music';
+  var root = document.documentElement;
+
+  function init() {
+    var audio = document.querySelector('audio[src], audio source') ? document.querySelector('audio') : null;
+    if (!audio) { return; }
+    if (document.querySelector(BUTTONS)) {
+      root.classList.add('iu-music-left'); // reuse the template's own control, just place it on the left
+      return;
+    }
+    if (document.querySelector('.iu-music-fab')) { return; }
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'iu-music-fab';
+    btn.setAttribute('aria-label', 'Play or pause music');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML =
+      '<svg class="iu-music-fab__play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.52.85l10.9-6.8a1 1 0 0 0 0-1.7L9.52 4.35A1 1 0 0 0 8 5.2z"/></svg>' +
+      '<svg class="iu-music-fab__pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1.2"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.2"/></svg>';
+    document.body.appendChild(btn);
+
+    var sync = function () {
+      var on = !audio.paused;
+      btn.classList.toggle('is-playing', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    };
+    audio.addEventListener('play', sync);
+    audio.addEventListener('pause', sync);
+    audio.addEventListener('ended', sync);
+    btn.addEventListener('click', function () {
+      if (audio.paused) {
+        var p = audio.play();
+        if (p && p.catch) { p.catch(function () { sync(); }); }
+      } else {
+        audio.pause();
+      }
+    });
+    sync();
+
+    // This template has no music button of its own, so start the music on the visitor's first tap / swipe (browsers block sound before that).
+    var armed = true;
+    var first = function (ev) {
+      if (!armed) { return; }
+      if (ev && ev.target && btn.contains(ev.target)) { armed = false; cleanup(); return; } // the button handles its own tap
+      armed = false;
+      cleanup();
+      if (audio.paused) { var p = audio.play(); if (p && p.catch) { p.catch(function () { sync(); }); } }
+    };
+    var evs = ['pointerdown', 'touchend', 'click', 'keydown'];
+    var cleanup = function () { evs.forEach(function (t) { document.removeEventListener(t, first, true); }); };
+    evs.forEach(function (t) { document.addEventListener(t, first, true); });
+  }
+
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
+})();

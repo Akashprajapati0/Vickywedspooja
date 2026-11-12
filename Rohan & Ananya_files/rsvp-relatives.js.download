@@ -1,0 +1,140 @@
+/*
+ * Relatives' names - shown inside the RSVP contact box, right after the last contact, as a natural continuation of the contacts.
+ *
+ * No heading, no icons, no card of its own: just the owner's lines, set in the SAME typography as the contact names (font family, size,
+ * weight, colour, spacing are read from the design's own first contact name), with the alignment the owner chose.
+ * Most wedding designs build their RSVP contacts in the browser (into #rsvpContacts), so this waits for them. The server only loads this
+ * script when the owner switched Relatives' Names on and saved names; Siyaram prints the same thing itself in PHP.
+ *
+ * Independent of the RSVP Guest Form and RSVP Contact Persons switches: when the design shows no contact box, the same lines go after the guest
+ * form, or - with neither - at the end of the invitation, set in that section's own text style. Works for every wedding design, present and future.
+ */
+(function () {
+  'use strict';
+  var data = window.inviteutsavRelatives;
+  if (!data || !data.text) { return; }
+  var ALIGN = { left: 'left', center: 'center', right: 'right' };
+
+  // The element that carries a contact's NAME in each design.
+  var NAME_SELECTORS = ['.rsvp-contact__info strong', '.event-detail strong', 'article h4', '.rsvp-contact strong', 'strong', 'h4'];
+  function contactName(wrap) {
+    for (var i = 0; i < NAME_SELECTORS.length; i++) {
+      var el = wrap.querySelector(NAME_SELECTORS[i]);
+      if (el && !el.closest('[data-iu-relatives]')) { return el; }
+    }
+    return null;
+  }
+
+  function build(wrap) {
+    var node = document.createElement('div');
+    node.setAttribute('data-iu-relatives', '1');
+    node.className = 'iu-relatives';
+    node.textContent = data.text;                       // textContent: the names are never treated as markup
+    var ref = contactName(wrap);
+    var cs = ref ? window.getComputedStyle(ref) : window.getComputedStyle(wrap);
+    var s = node.style;
+    s.fontFamily = cs.fontFamily; s.fontSize = cs.fontSize; s.fontWeight = cs.fontWeight; s.fontStyle = cs.fontStyle;
+    s.letterSpacing = cs.letterSpacing; s.textTransform = cs.textTransform; s.color = cs.color; s.lineHeight = cs.lineHeight === 'normal' ? '1.5' : cs.lineHeight;
+    s.whiteSpace = 'pre-line';                          // the owner's own line breaks stay
+    s.overflowWrap = 'anywhere';
+    s.textAlign = ALIGN[data.align] || 'left';
+    s.display = 'block'; s.width = '100%'; s.boxSizing = 'border-box';
+    s.gridColumn = '1 / -1'; s.flex = '0 0 100%';       // a full row inside a grid or flex contact list
+    s.margin = '12px 0 0'; s.padding = '0';
+    s.border = '0'; s.background = 'none'; s.boxShadow = 'none';
+    return node;
+  }
+
+  function place() {
+    var wrap = document.getElementById('rsvpContacts');
+    if (!wrap) { return false; }
+    var existing = wrap.querySelector('[data-iu-relatives]');
+    if (existing) {
+      if (wrap.lastElementChild !== existing) { wrap.appendChild(existing); } // always the last item
+      return true;
+    }
+    wrap.appendChild(build(wrap));
+    return true;
+  }
+
+  // ---- No contact box on the page: place the lines after the guest form / RSVP section, else at the end of the invitation. ----
+  function textRef(box) {
+    // The section's ordinary text (a paragraph first), never a heading or a button.
+    var passes = ['p', 'li, strong, span, div'];
+    for (var k = 0; k < passes.length; k++) {
+      var ps = box.querySelectorAll(passes[k]);
+      for (var i = 0; i < ps.length; i++) {
+        var el = ps[i];
+        if (el.closest('[data-iu-relatives], form, button, a, label, h1, h2, h3, [hidden], .invite-credit') || !el.textContent.trim() || (k && el.children.length)) { continue; }
+        var cs = window.getComputedStyle(el);
+        if (cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.fontSize) >= 12 && parseFloat(cs.fontSize) <= 26) { return el; }
+      }
+    }
+    return box;
+  }
+  function standalone(box) {
+    var node = document.createElement('div');
+    node.setAttribute('data-iu-relatives', '1');
+    node.className = 'iu-relatives iu-relatives--solo';
+    node.textContent = data.text;
+    var cs = window.getComputedStyle(textRef(box));
+    var s = node.style;
+    s.fontFamily = cs.fontFamily; s.fontSize = Math.min(parseFloat(cs.fontSize) || 16, 18) + 'px'; s.fontWeight = cs.fontWeight; s.fontStyle = cs.fontStyle;   // quote-sized text is capped: these are plain family lines
+    s.letterSpacing = cs.letterSpacing; s.textTransform = 'none'; s.color = cs.color; s.lineHeight = '1.6';
+    s.whiteSpace = 'pre-line'; s.overflowWrap = 'anywhere';
+    s.textAlign = ALIGN[data.align] || 'left';
+    s.display = 'block'; s.boxSizing = 'border-box'; s.width = '100%'; s.maxWidth = '100%';
+    s.margin = '22px auto 0'; s.padding = '0 16px';
+    return node;
+  }
+  function innerBox(sec) {
+    var form = sec.querySelector('form');
+    if (form && form.parentNode && form.parentNode !== sec) { return form.parentNode; }
+    var kids = sec.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].tagName === 'DIV' && /container|inner|wrap|content|panel|card|body/i.test(kids[i].className)) { return kids[i]; }
+    }
+    return sec;
+  }
+  function fallback() {
+    if (document.querySelector('[data-iu-relatives], .siyaram-rsvp__relatives')) { return true; }
+    var form = document.querySelector('#guestForm, #siyaramGuestForm, #rsvpForm, form.rsvp-form, #guest form, #rsvp form');
+    if (form && form.parentNode) {                     // right after the guest form, inside the same section box
+      var node1 = standalone(form.parentNode);
+      form.parentNode.insertBefore(node1, form.nextSibling);
+      return true;
+    }
+    var sec = document.getElementById('rsvp') || document.getElementById('guest');
+    var after = null;
+    if (!sec) {                                         // neither form nor contacts: the end of the invitation
+      var all = document.querySelectorAll('main section, .invitation section, body > section, section');
+      sec = all.length ? all[all.length - 1] : null;
+      if (!sec) { return false; }
+      after = sec.querySelector('.invite-credit, [class*="credit"], footer');
+    }
+    var box = innerBox(sec);
+    var node = standalone(box);
+    if (after && after.parentNode) { after.parentNode.insertBefore(node, after); } else { box.appendChild(node); }
+    return true;
+  }
+  function start() {
+    var wrap = document.getElementById('rsvpContacts');
+    if (!wrap) { fallback(); return; }
+    // The design may render (or re-render) its contacts after this script runs: keep the block last, never twice.
+    var busy = false;
+    var obs = new MutationObserver(function () {
+      if (busy) { return; }
+      busy = true;
+      try {
+        var ex = wrap.querySelector('[data-iu-relatives]');
+        if (ex) { ex.parentNode.removeChild(ex); }     // rebuilt from the freshly rendered contacts, so it always matches their typography
+        place();
+      } finally { window.setTimeout(function () { busy = false; }, 0); }
+    });
+    obs.observe(wrap, { childList: true });
+    place();
+  }
+
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', start); } else { start(); }
+  window.addEventListener('load', function () { var w = document.getElementById('rsvpContacts'); if (w) { if (!w.querySelector('[data-iu-relatives]')) { place(); } } else { fallback(); } });
+})();

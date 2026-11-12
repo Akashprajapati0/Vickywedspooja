@@ -1,0 +1,44 @@
+/*
+ * Shared music control for the demo invitations (assets/js/shared-music.js, enqueued from footer-invite-immersive.php).
+ * Every template already ships its own round music button in its own style; this file only moves that button to the LEFT edge so the
+ * control sits in the same place in every design (the right edge belongs to the Edit / WhatsApp buttons). A template that has no
+ * button of its own gets the .iu-music-fab below.
+ */
+html.iu-music-left #musicToggle,
+html.iu-music-left #musicBtn,
+html.iu-music-left .music-toggle,
+html.iu-music-left .music-btn,
+html.iu-music-left .music-orb,
+html.iu-music-left .pd-music,
+html.iu-music-left .siyaram-music {
+	left: max(14px, env(safe-area-inset-left)) !important;
+	right: auto !important;
+}
+
+.iu-music-fab {
+	position: fixed;
+	left: max(14px, env(safe-area-inset-left));
+	bottom: max(18px, env(safe-area-inset-bottom));
+	z-index: 9990;
+	width: 46px;
+	height: 46px;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, .55);
+	background: rgba(40, 24, 18, .62);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	cursor: pointer;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+	-webkit-backdrop-filter: blur(6px);
+	backdrop-filter: blur(6px);
+	transition: transform .2s ease, background .2s ease;
+	-webkit-tap-highlight-color: transparent;
+}
+.iu-music-fab:hover { transform: scale(1.06); background: rgba(40, 24, 18, .8); }
+.iu-music-fab:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.iu-music-fab svg { width: 20px; height: 20px; fill: currentColor; display: block; }
+.iu-music-fab .iu-music-fab__pause { display: none; }
+.iu-music-fab.is-playing .iu-music-fab__play { display: none; }
+.iu-music-fab.is-playing .iu-music-fab__pause { display: block; }

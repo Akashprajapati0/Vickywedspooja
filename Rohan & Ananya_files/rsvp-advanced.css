@@ -1,0 +1,58 @@
+/*
+ * InviteUtsav — Advanced RSVP block (wedding invitations). Mobile-first, no framework.
+ * It inherits the host template's font and text colour and takes its look from CSS variables the host template sets on its own
+ * root (see the per-template block at the end of this file), so it never imposes a universal design:
+ *   --iu-adv-accent   selected / active colour        --iu-adv-on     text on the accent colour
+ *   --iu-adv-line     outline of unselected controls   --iu-adv-bg     control background
+ *   --iu-adv-radius   corner radius of the chips       --iu-adv-muted  secondary text
+ */
+.iu-adv{--a:var(--iu-adv-accent,#8a5a14);--on:var(--iu-adv-on,#fff);--line:var(--iu-adv-line,rgba(120,100,70,.4));--bg:var(--iu-adv-bg,rgba(255,255,255,.85));--r:var(--iu-adv-radius,999px);--muted:var(--iu-adv-muted,rgba(0,0,0,.6));--err:var(--iu-adv-error,#b3402c);
+  font:inherit;color:inherit;text-align:left;margin:0 0 14px;}
+.iu-adv *,.iu-adv *::before,.iu-adv *::after{box-sizing:border-box;}
+.iu-adv[hidden],.iu-adv [hidden]{display:none!important;}
+.iu-adv p,.iu-adv strong,.iu-adv output{text-transform:none;letter-spacing:normal;}
+.iu-adv__edit-note{margin:0 0 12px;padding:8px 12px;border-radius:10px;border:1px dashed var(--line);font-size:.85em;}
+.iu-adv__group{border:0;margin:0 0 16px;padding:0;min-width:0;}
+.iu-adv__group.is-invalid .iu-adv__choice span{border-color:var(--err);}
+.iu-adv .iu-adv__legend,.iu-adv .iu-adv__question{display:block;float:none;width:auto;padding:0!important;margin:0 0 8px!important;font:inherit!important;font-size:.95em!important;font-weight:600!important;line-height:1.35!important;letter-spacing:.01em!important;text-transform:none!important;text-align:left!important;color:inherit!important;}
+.iu-adv .iu-adv__question{font-weight:500!important;}
+.iu-adv__choices{display:flex;flex-wrap:wrap;gap:8px;}
+.iu-adv__choice{position:relative;margin:0;cursor:pointer;}
+.iu-adv__choice input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
+.iu-adv .iu-adv__choice{display:inline-block;margin:0;padding:0;border:0;background:none;text-transform:none!important;letter-spacing:normal!important;font:inherit!important;color:inherit!important;}
+.iu-adv .iu-adv__choice span{display:inline-flex;align-items:center;min-height:44px;padding:9px 18px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);font:inherit;font-size:.8em;font-weight:500;line-height:1.3;color:inherit;text-transform:none;letter-spacing:normal;transition:background-color .2s,color .2s,border-color .2s;}
+.iu-adv .iu-adv__choice input:checked + span{background:var(--a);border-color:var(--a);color:var(--on);}
+.iu-adv__choice input:focus-visible + span{outline:2px solid var(--a);outline-offset:2px;}
+.iu-adv__counters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.iu-adv .iu-adv__counter-label{font:inherit!important;font-size:.85em!important;font-weight:600!important;text-transform:none!important;letter-spacing:normal!important;}
+.iu-adv__counter{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px;border:1px solid var(--line);border-radius:14px;background:var(--bg);}
+.iu-adv__counter-label{font-size:.82em;font-weight:600;}
+.iu-adv__stepper{display:inline-flex;align-items:center;gap:6px;}
+.iu-adv__step{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--line);border-radius:50%;background:transparent;color:inherit;font-size:1.3em;line-height:1;cursor:pointer;transition:background-color .2s,color .2s;-webkit-tap-highlight-color:transparent;}
+.iu-adv__step:hover:not(:disabled){background:var(--a);color:var(--on);border-color:var(--a);}
+.iu-adv__step:disabled{opacity:.35;cursor:not-allowed;}
+.iu-adv__step:focus-visible{outline:2px solid var(--a);outline-offset:2px;}
+.iu-adv__count{min-width:2ch;text-align:center;font-size:1em;font-weight:600;font-variant-numeric:tabular-nums;}
+.iu-adv__total{margin:10px 0 0;font-size:.95em;text-align:center;}
+.iu-adv__total strong{font-size:1.15em;}
+.iu-adv__hint{margin:6px 0 0;font-size:.78em;color:var(--muted);}
+.iu-adv__dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;}
+.iu-adv__datefield{min-width:0;}
+.iu-adv .iu-adv__label{display:block;margin:0 0 5px!important;font:inherit!important;font-size:.85em!important;font-weight:600!important;text-transform:none!important;letter-spacing:normal!important;color:inherit!important;}
+.iu-adv__label em{font-style:normal;color:var(--err);}
+.iu-adv__input{width:100%;max-width:100%;min-height:46px;padding:10px 12px;font:inherit;font-size:16px;color:inherit;background:var(--iu-adv-field-bg,var(--bg));border:1px solid var(--line);border-radius:12px;-webkit-appearance:none;appearance:none;text-transform:none;letter-spacing:normal;}
+.iu-adv__input:focus{outline:2px solid var(--a);outline-offset:1px;}
+textarea.iu-adv__input{min-height:84px;resize:vertical;line-height:1.5;}
+.iu-adv__acc{margin-top:12px;}
+.iu-adv__error{margin:8px 0 0;font-size:.82em;color:var(--err);}
+.iu-adv__error--summary{padding:8px 12px;border-radius:10px;background:rgba(179,64,44,.08);}
+.iu-adv__ack{margin:10px 0 0;font-size:.88em;opacity:.9;}
+@media (max-width:360px){.iu-adv__dates{grid-template-columns:minmax(0,1fr);}}
+@media (min-width:640px){.iu-adv__counters{max-width:420px;}}
+@media (prefers-reduced-motion:reduce){.iu-adv *{transition:none!important;}}
+
+/* WhatsApp hand-off panel (rendered by rsvp-advanced.js into the host template's own success panel). Zero specificity, so a template's own
+   .whatsapp-rsvp-btn styling wins where it has one; otherwise this is a plain WhatsApp-green pill. */
+:where(.iu-adv__wa-note){margin:0 0 12px;font-size:.95em;line-height:1.5;}
+:where(.iu-adv__wa-btn){display:flex;align-items:center;justify-content:center;min-height:48px;margin:8px auto 0;padding:10px 20px;max-width:420px;border-radius:999px;background:#128c4a;color:#fff;font-weight:700;text-decoration:none;text-align:center;}
+:where(.iu-adv__wa-btn--alt){background:transparent;color:inherit;border:1px solid currentColor;font-weight:600;}.iu-adv__req{color:var(--err);font-style:normal;margin-left:.15em;}

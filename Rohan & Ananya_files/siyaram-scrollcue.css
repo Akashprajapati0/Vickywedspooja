@@ -1,0 +1,27 @@
+/* Scroll to Continue cue on the landing screen - every Siyaram skin (Raghukul, Raghukul Custom, the private client cards, Royal Darbar (Sikh), Royal Noor (Muslim)).
+   Same design, spacing and animation everywhere; only the colours differ per skin (the --cue-* variables, taken from each skin's own palette).
+   The container has no background or border: the fill, border and padding belong to the text, which is the button. The arrow is bare. */
+.siyaram-invitation .siyaram-scrollcue{
+  --cue-ink:#5f100f; --cue-fill:rgba(255,244,230,.9); --cue-fill-hover:#fff4e6; --cue-border:rgba(221,164,93,.85); --cue-halo:#fff4e6; --cue-shadow:rgba(95,16,15,.16);
+  position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:45;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;cursor:pointer;opacity:0;visibility:hidden;transition:opacity .6s ease,visibility .6s ease;-webkit-tap-highlight-color:transparent;
+}
+/* Royal Darbar (Sikh): royal blue + gold on ivory */
+.siyaram-invitation.siyaram-skin-royal-darbar .siyaram-scrollcue{--cue-ink:#0f2a69; --cue-fill:rgba(255,255,240,.92); --cue-fill-hover:#fffff0; --cue-border:rgba(212,175,55,.95); --cue-halo:#fffff0; --cue-shadow:rgba(11,31,77,.2);}
+/* Royal Noor (Muslim): emerald + gold on ivory */
+.siyaram-invitation.siyaram-skin-royal-noor .siyaram-scrollcue{--cue-ink:#034a39; --cue-fill:rgba(255,255,240,.92); --cue-fill-hover:#fffff0; --cue-border:rgba(212,175,55,.95); --cue-halo:#fffff0; --cue-shadow:rgba(6,36,28,.2);}
+.siyaram-invitation .siyaram-scrollcue.is-on{opacity:1;visibility:visible;}
+.siyaram-invitation .siyaram-scrollcue:focus-visible{outline:2px solid var(--cue-ink);outline-offset:3px;}
+.siyaram-invitation .siyaram-scrollcue__arrow{display:block;overflow:visible;width:26px;height:32px;color:var(--cue-ink);stroke-width:2.6;filter:drop-shadow(0 0 2px var(--cue-halo)) drop-shadow(0 0 5px var(--cue-halo)) drop-shadow(0 0 11px var(--cue-halo));}
+.siyaram-invitation .siyaram-scrollcue__c1,.siyaram-invitation .siyaram-scrollcue__c2{animation:siyaram-cue 1.9s cubic-bezier(.45,0,.25,1) infinite;}
+.siyaram-invitation .siyaram-scrollcue__c2{animation-delay:.28s;}
+@keyframes siyaram-cue{0%{opacity:0;transform:translateY(-5px);}45%{opacity:1;}100%{opacity:0;transform:translateY(7px);}}
+.siyaram-invitation .siyaram-scrollcue__text{display:block;padding:9px 24px;border:1px solid var(--cue-border);border-radius:999px;background:var(--cue-fill);box-shadow:0 3px 14px var(--cue-shadow);color:var(--cue-ink);font-size:11.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;line-height:1.3;white-space:nowrap;}
+.siyaram-invitation .siyaram-scrollcue:hover .siyaram-scrollcue__text{background:var(--cue-fill-hover);}
+@media (prefers-reduced-motion:reduce){.siyaram-invitation .siyaram-scrollcue__c1,.siyaram-invitation .siyaram-scrollcue__c2{animation:none;opacity:1;}}
+/* tablet */
+@media (min-width:600px) and (max-width:1023.98px){.siyaram-invitation .siyaram-scrollcue{bottom:calc(20px + env(safe-area-inset-bottom,0px));}.siyaram-invitation .siyaram-scrollcue__text{font-size:12.5px;padding:10px 28px;}}
+/* desktop */
+@media (min-width:1024px){.siyaram-invitation .siyaram-scrollcue{bottom:24px;}.siyaram-invitation .siyaram-scrollcue__text{font-size:13px;padding:10px 30px;}}
+/* demo invitations carry a floating Edit / WhatsApp button pair at the bottom-right on small screens: lift the cue above it so the two never overlap */
+@media (max-width:767.98px){.siyaram-invitation .siyaram-scrollcue--demo{bottom:calc(84px + env(safe-area-inset-bottom,0px));}}
+.siyaram-invitation.siyaram-skin-kailash-bhawan .siyaram-scrollcue{--cue-ink:#13244a; --cue-fill:rgba(248,250,255,.92); --cue-fill-hover:#f8faff; --cue-border:rgba(200,168,90,.95); --cue-halo:#f8faff; --cue-shadow:rgba(14,26,51,.22);}

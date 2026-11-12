@@ -1,0 +1,185 @@
+/**
+ * InviteUtsav Analytics — frontend tracker.
+ *
+ * window.InviteUtsavAnalytics.track(eventName, data) / window.iuTrackEvent(eventName, data)
+ * per the spec's own JS API (section 23). Visitor ID (cookie + localStorage,
+ * 90 days) and session ID (localStorage, 30-min-inactivity rolling window)
+ * are entirely client-owned, matching the spec's own architecture — the
+ * server never mints or reads these, only receives and persists them.
+ *
+ * Must never break the page: every public call is wrapped so a thrown error
+ * here can't surface anywhere else (spec section 19).
+ */
+(function () {
+	'use strict';
+
+	if ( ! window.inviteutsavAnalytics || ! window.inviteutsavAnalytics.restUrl ) {
+		return;
+	}
+	var REST_URL = window.inviteutsavAnalytics.restUrl;
+	var VISITOR_COOKIE = 'iu_visitor_id';
+	var SESSION_KEY = 'iu_session_id';
+	var SESSION_ACTIVITY_KEY = 'iu_session_last_activity';
+	var FIRST_TOUCH_KEY = 'iu_first_touch';
+	var SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+
+	function randomId( prefix ) {
+		return prefix + Date.now().toString( 36 ) + '_' + Math.random().toString( 36 ).slice( 2, 12 );
+	}
+
+	function readCookie( name ) {
+		var match = document.cookie.match( new RegExp( '(?:^|; )' + name + '=([^;]*)' ) );
+		return match ? decodeURIComponent( match[ 1 ] ) : null;
+	}
+
+	function writeCookie( name, value, days ) {
+		var expires = new Date( Date.now() + days * 24 * 60 * 60 * 1000 ).toUTCString();
+		var secure = ( 'https:' === location.protocol ) ? '; Secure' : '';
+		document.cookie = name + '=' + encodeURIComponent( value ) + '; expires=' + expires + '; path=/; SameSite=Lax' + secure;
+	}
+
+	function safeGet( storage, key ) {
+		try {
+			return storage.getItem( key );
+		} catch ( e ) {
+			return null;
+		}
+	}
+
+	function safeSet( storage, key, value ) {
+		try {
+			storage.setItem( key, value );
+		} catch ( e ) {}
+	}
+
+	function getVisitorId() {
+		var id = readCookie( VISITOR_COOKIE ) || safeGet( window.localStorage, VISITOR_COOKIE );
+		if ( ! id ) {
+			id = randomId( 'iu_visitor_' );
+		}
+		writeCookie( VISITOR_COOKIE, id, 90 );
+		safeSet( window.localStorage, VISITOR_COOKIE, id );
+		return id;
+	}
+
+	function getSessionId() {
+		var now = Date.now();
+		var existing = safeGet( window.localStorage, SESSION_KEY );
+		var lastActivity = parseInt( safeGet( window.localStorage, SESSION_ACTIVITY_KEY ), 10 ) || 0;
+
+		if ( ! existing || ( now - lastActivity ) > SESSION_TIMEOUT_MS ) {
+			existing = randomId( 'iu_session_' );
+			safeSet( window.localStorage, SESSION_KEY, existing );
+		}
+		safeSet( window.localStorage, SESSION_ACTIVITY_KEY, String( now ) );
+		return existing;
+	}
+
+	/** Parsed once per page load, reused for every event fired on this page. */
+	function currentUtm() {
+		var params = new URLSearchParams( location.search );
+		return {
+			source: params.get( 'utm_source' ) || '',
+			medium: params.get( 'utm_medium' ) || '',
+			campaign: params.get( 'utm_campaign' ) || '',
+			content: params.get( 'utm_content' ) || '',
+			term: params.get( 'utm_term' ) || '',
+		};
+	}
+
+	/**
+	 * First-touch is captured once, the very first time this browser is
+	 * ever seen, and never overwritten again — spec section 3's explicit
+	 * requirement. Stored client-side purely so later pageviews on this same
+	 * device don't need to re-derive it; the server is still the one that
+	 * persists it permanently on the visitor's very first event.
+	 */
+	function ensureFirstTouchMarker() {
+		if ( ! safeGet( window.localStorage, FIRST_TOUCH_KEY ) ) {
+			safeSet( window.localStorage, FIRST_TOUCH_KEY, '1' );
+		}
+	}
+
+	function send( payload ) {
+		var body = JSON.stringify( payload );
+		try {
+			if ( navigator.sendBeacon ) {
+				var blob = new Blob( [ body ], { type: 'application/json' } );
+				var ok = navigator.sendBeacon( REST_URL, blob );
+				if ( ok ) {
+					return;
+				}
+			}
+		} catch ( e ) {}
+
+		try {
+			fetch( REST_URL, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: body,
+				keepalive: true,
+			} ).catch( function () {} );
+		} catch ( e ) {}
+	}
+
+	function track( eventName, data ) {
+		try {
+			var utm = currentUtm();
+			var payload = {
+				event: eventName,
+				visitor_id: getVisitorId(),
+				session_id: getSessionId(),
+				page_url: location.href,
+				referrer: document.referrer || '',
+				source: utm.source,
+				medium: utm.medium,
+				campaign: utm.campaign,
+				content: utm.content,
+				term: utm.term,
+				data: ( data && typeof data === 'object' ) ? data : {},
+			};
+			if ( data && data.template_slug ) {
+				payload.template_slug = data.template_slug;
+			}
+			if ( data && data.invitation_id ) {
+				payload.invitation_id = data.invitation_id;
+			}
+			if ( data && data.order_id ) {
+				payload.order_id = data.order_id;
+			}
+			send( payload );
+		} catch ( e ) {
+			// Never let a tracking failure surface anywhere else on the page.
+		}
+	}
+
+	// Public getters — Phase 3's checkout attribution needs these IDs sent
+	// explicitly on the real checkout-start REST call, since (unlike the
+	// visitor ID) the session ID only ever lives in localStorage, never a
+	// cookie, so the server can't read it any other way. Reads the exact
+	// same storage getVisitorId()/getSessionId() above already use, so
+	// calling these never mints a NEW id — it just returns whatever's
+	// already current.
+	function getVisitorIdSafe() {
+		try {
+			return readCookie( VISITOR_COOKIE ) || safeGet( window.localStorage, VISITOR_COOKIE ) || '';
+		} catch ( e ) {
+			return '';
+		}
+	}
+	function getSessionIdSafe() {
+		try {
+			return safeGet( window.localStorage, SESSION_KEY ) || '';
+		} catch ( e ) {
+			return '';
+		}
+	}
+
+	window.InviteUtsavAnalytics = { track: track, getVisitorId: getVisitorIdSafe, getSessionId: getSessionIdSafe };
+	window.iuTrackEvent = track;
+
+	try {
+		ensureFirstTouchMarker();
+		track( 'page_view', {} );
+	} catch ( e ) {}
+})();

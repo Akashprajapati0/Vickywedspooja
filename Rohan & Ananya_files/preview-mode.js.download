@@ -1,0 +1,62 @@
+/* ==========================================================================
+   InviteUtsav — Preview-render mode.
+   Loaded on every guest-facing template render (wedding-01 and every
+   letter-theme design), but does nothing at all unless
+   ?inviteutsav_preview_render=1 is present — only the standalone preview
+   render service (inc/preview-render.php) ever adds that, immediately
+   before taking its screenshots (see that file's own doc comment for the
+   full "why": the browser is never sent this page's real HTML before
+   payment, only the resulting watermarked images).
+
+   Scroll-reveal (.reveal-up/.reveal-scale/etc., gated by
+   IntersectionObserver in both wedding-01.js and letter-theme.js) needs
+   NO help here — both already fall back to showing everything immediately
+   whenever prefers-reduced-motion is set, and the render service's own
+   Puppeteer call emulates that media feature for exactly this reason.
+
+   The one thing that's still an explicit click-to-open interaction, not
+   scroll-triggered, is the curtain/envelope opening gate — this file's
+   only job is to trigger that automatically so a full-page screenshot
+   shows real content instead of an unopened gate.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var params = new URLSearchParams(window.location.search);
+  if ('1' !== params.get('inviteutsav_preview_render')) {
+    return;
+  }
+
+  function tryOpenGate() {
+    // wedding-01's envelope, any letter-theme's curtain, or Rajkamal
+    // Vivaah's opening gate — whichever this page actually has (a page
+    // only ever has one).
+    var trigger = document.getElementById('curtainOpenBtn') || document.getElementById('envelopeOpenBtn') || document.getElementById('enterGateBtn');
+    if (!trigger) {
+      return false;
+    }
+    trigger.click();
+    return true;
+  }
+
+  function boot() {
+    if (tryOpenGate()) {
+      return;
+    }
+    // The gate's own script may not have finished wiring its button yet —
+    // briefly retry rather than assume it will never appear.
+    var attempts = 0;
+    var timer = setInterval(function () {
+      attempts += 1;
+      if (tryOpenGate() || attempts > 30) {
+        clearInterval(timer);
+      }
+    }, 100);
+  }
+
+  if ('loading' === document.readyState) {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();

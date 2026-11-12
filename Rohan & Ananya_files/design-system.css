@@ -1,0 +1,697 @@
+/* ==========================================================================
+   InviteUtsav — Design System
+   Tokens + base elements + reusable components.
+   Palette derived directly from the InviteUtsav logo (assets/logo.svg):
+   plum ink, magenta-rose, saffron-gold.
+   ========================================================================== */
+
+:root{
+  /* ---- Brand colors (from logo) ---- */
+  --plum-900:#2A011F;
+  --plum-800:#3C0235;
+  --plum-700:#431946;
+  --wine-700:#55063D;
+  --wine-600:#84124D;
+  --berry-600:#980B47;
+  --rose-500:#E6235A;
+  --rose-600:#C81B4C;
+  --gold-500:#E69836;
+  --gold-400:#E8A547;
+  --gold-300:#F0C482;
+
+  /* ---- Neutrals (designed to complement the brand set) ---- */
+  --ivory:#FDF9F4;
+  --champagne:#F7EEE1;
+  --champagne-deep:#EFE1CC;
+  --cream:#FFFDF9;
+  --charcoal:#2A2024;
+  --charcoal-soft:#6B5A5F;
+  --charcoal-faint:#A8969B;
+  --line:#E8DACB;
+  --line-soft:#F0E6D8;
+  --white:#FFFFFF;
+
+  /* ---- Semantic ---- */
+  --bg:var(--ivory);
+  --bg-alt:var(--champagne);
+  --surface:var(--cream);
+  --ink:var(--plum-800);
+  --ink-soft:var(--charcoal-soft);
+  --accent:var(--rose-500);
+  --accent-ink:var(--white);
+  --gold:var(--gold-400);
+
+  /* ---- Type ---- */
+  --font-display:"Fraunces", "Georgia", serif;
+  --font-body:"Jost", "Segoe UI", sans-serif;
+
+  /* ---- Spacing scale (4px base) ---- */
+  --sp-1:.4rem;
+  --sp-2:.8rem;
+  --sp-3:1.2rem;
+  --sp-4:1.6rem;
+  --sp-5:2.4rem;
+  --sp-6:3.2rem;
+  --sp-7:4.8rem;
+  --sp-8:6.4rem;
+  --sp-9:9.6rem;
+
+  --header-h: 84px;
+  --section-pad: clamp(2.4rem, 4vw, 3.6rem);
+  --container-w: 1240px;
+  --container-pad: clamp(1.6rem, 5vw, 3.2rem);
+
+  /* ---- Radius ---- */
+  --r-sm:10px;
+  --r-md:18px;
+  --r-lg:28px;
+  --r-xl:40px;
+  --r-pill:999px;
+
+  /* ---- Shadow (warm, plum-tinted — never pure black) ---- */
+  --shadow-sm: 0 2px 10px rgba(60, 2, 53, .07);
+  --shadow-md: 0 12px 32px rgba(60, 2, 53, .10);
+  --shadow-lg: 0 24px 60px rgba(60, 2, 53, .16);
+  --shadow-gold: 0 10px 30px rgba(230, 152, 54, .25);
+  --shadow-rose: 0 14px 34px rgba(230, 35, 90, .28);
+
+  /* ---- Motion ---- */
+  --ease-premium: cubic-bezier(.22,1,.36,1);
+  --ease-soft: cubic-bezier(.4,0,.2,1);
+  --dur-fast: .25s;
+  --dur-mid: .5s;
+  --dur-slow: .9s;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Reset / base                                                            */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site *,
+.inviteutsav-public-site *::before,
+.inviteutsav-public-site *::after{ box-sizing:border-box; }
+/* Guarantees the [hidden] attribute always wins, even against a later,
+   equally-specific class rule that sets its own `display` (e.g.
+   `.some-flex-block{ display:flex }` on an element JS also toggles via
+   `el.hidden = true`) — without this, whichever rule is declared later in
+   the cascade silently wins the specificity tie and the element never
+   actually hides. */
+.inviteutsav-public-site [hidden]{ display:none !important; }
+/* overflow-x here too (not just on body below) — off-screen reveal
+   animations (.reveal-left/.reveal-right, translateX(±40px) before they
+   scroll into view) genuinely extend past the viewport edge; without this,
+   body's own overflow-x:hidden doesn't stop that from widening html's own
+   scrollable area, which let the page shift/cut content during scroll. */
+.inviteutsav-public-site{ scroll-behavior:smooth; overflow-x:hidden; }
+
+/* Custom scrollbar, sitewide — slim + subtle, brand-colored, so every
+   scrollable area (page, any inner overflow:auto panel/modal) matches
+   instead of showing the browser's default chunky scrollbar. Firefox uses
+   the standard properties; Chrome/Edge/Safari use the older but still
+   universally-supported ::-webkit-scrollbar pseudo-elements. */
+.inviteutsav-public-site *{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(60, 2, 53, .3) transparent;
+}
+.inviteutsav-public-site *::-webkit-scrollbar{ width:8px; height:8px; }
+.inviteutsav-public-site *::-webkit-scrollbar-track{ background:transparent; }
+.inviteutsav-public-site *::-webkit-scrollbar-thumb{
+  background:rgba(60, 2, 53, .3);
+  border-radius:999px;
+  border:2px solid transparent;
+  background-clip:padding-box;
+}
+.inviteutsav-public-site *::-webkit-scrollbar-thumb:hover{
+  background:rgba(60, 2, 53, .5);
+  background-clip:padding-box;
+}
+.inviteutsav-public-site *::-webkit-scrollbar-corner{ background:transparent; }
+
+@media (prefers-reduced-motion: reduce){
+  .inviteutsav-public-site{ scroll-behavior:auto; }
+  .inviteutsav-public-site *,
+.inviteutsav-public-site *::before,
+.inviteutsav-public-site *::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+}
+/* Scoped to .inviteutsav-public-site (the wrapper div every ordinary
+   WordPress page is rendered inside — see header.php/footer.php), not
+   bare `body` — this is the public marketing/account site's own base
+   typography/background, which must never apply to the guest-facing
+   invitation page. That page uses header-invite-immersive.php /
+   footer-invite-immersive.php instead, which never opens this wrapper,
+   so this rule simply never matches there; each invitation template sets
+   its own base styling independently, unaffected either way. See
+   assets/css/templates/vrindavan-prem.css's/wedding-01.css's own
+   documented workarounds for the identical conflict this was causing
+   with the h1-h4 rule just below, before this fix. */
+.inviteutsav-public-site{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+.inviteutsav-public-site img,
+.inviteutsav-public-site svg{ max-width:100%; display:block; }
+.inviteutsav-public-site a{ color:inherit; text-decoration:none; }
+.inviteutsav-public-site ul{ margin:0; padding:0; list-style:none; }
+.inviteutsav-public-site button{ font-family:inherit; cursor:pointer; border:none; }
+.inviteutsav-public-site input,
+.inviteutsav-public-site textarea,
+.inviteutsav-public-site select{ font-family:inherit; font-size:1rem; }
+
+.inviteutsav-public-site .container{
+  width:100%;
+  max-width:var(--container-w);
+  margin-inline:auto;
+  padding-inline:var(--container-pad);
+}
+
+.inviteutsav-public-site section{ position:relative; scroll-margin-top:var(--header-h, 84px); }
+
+/* ---------------------------------------------------------------------- */
+/* Typography                                                              */
+/* ---------------------------------------------------------------------- */
+/* Scoped to .inviteutsav-public-site — see the body rule's comment above
+   for why. This specific rule is the one three different invitation
+   templates (vrindavan-prem.css, wedding-01.css, kailash-vivaah.css) were
+   already documented as fighting via their own higher-specificity resets
+   before this fix, because it used to apply (unscoped) to every heading
+   on the guest-facing invitation page too. */
+.inviteutsav-public-site h1,
+.inviteutsav-public-site h2,
+.inviteutsav-public-site h3,
+.inviteutsav-public-site h4{
+  font-family:var(--font-display);
+  color:var(--plum-800);
+  line-height:1.12;
+  margin:0;
+  letter-spacing:-.01em;
+  font-weight:normal;
+}
+.inviteutsav-public-site h1{ font-size:3.6rem; letter-spacing:-.02em; line-height:1.05; }
+.inviteutsav-public-site h2{ font-size:clamp(2.1rem, 3.6vw, 2.8rem); }
+.inviteutsav-public-site h3{ font-size:clamp(1.4rem, 2vw, 1.8rem); }
+.inviteutsav-public-site h4{ font-size:1.15rem; }
+
+.inviteutsav-public-site p{ margin:5px 0; font-size:14px; }
+
+.inviteutsav-public-site .eyebrow{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-weight:500;
+  font-size:1.05rem;
+  color:var(--rose-500);
+  display:inline-flex;
+  align-items:center;
+  gap:.6em;
+  margin-bottom:var(--sp-3);
+}
+.inviteutsav-public-site .eyebrow::before{
+  content:"";
+  width:28px; height:1px;
+  background:var(--gold-400);
+  display:inline-block;
+}
+
+.inviteutsav-public-site .section-head{
+  max-width:640px;
+  margin-bottom:var(--sp-7);
+}
+.inviteutsav-public-site .section-head.center{ margin-inline:auto; text-align:center; }
+.inviteutsav-public-site .section-head p{
+  margin-top:var(--sp-3);
+  color:var(--ink-soft);
+  font-size:1.08rem;
+}
+
+.inviteutsav-public-site .accent-word{ font-style:italic; font-weight:500; }
+
+.inviteutsav-public-site .lede{ font-size:1.15rem; color:var(--ink-soft); }
+.inviteutsav-public-site .muted{ color:var(--ink-soft); }
+.inviteutsav-public-site .text-gold{ color:var(--gold-500); }
+.inviteutsav-public-site .text-accent{ color:var(--accent); }
+.inviteutsav-public-site .text-rose{ color:var(--rose-500); }
+
+/* ---------------------------------------------------------------------- */
+/* Buttons                                                                 */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.6em;
+  padding:1rem 2rem;
+  border-radius:var(--r-pill);
+  font-weight:700;
+  font-size:.98rem;
+  border:1px solid transparent;
+  transition:transform var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft), background var(--dur-fast) var(--ease-soft), color var(--dur-fast) var(--ease-soft);
+  white-space:nowrap;
+}
+.inviteutsav-public-site .btn:active{ transform:translateY(1px) scale(.99); }
+
+.inviteutsav-public-site .btn-primary{
+  background:linear-gradient(135deg, var(--rose-500), var(--rose-600));
+  color:var(--white);
+  box-shadow:var(--shadow-rose);
+}
+.inviteutsav-public-site .btn-primary:hover{ transform:translateY(-2px); box-shadow:0 18px 40px rgba(230,35,90,.34); }
+
+.inviteutsav-public-site .btn-secondary{
+  background:transparent;
+  color:var(--plum-800);
+  border-color:var(--plum-800);
+}
+.inviteutsav-public-site .btn-secondary:hover{ background:var(--plum-800); color:var(--white); transform:translateY(-2px); }
+
+.inviteutsav-public-site .btn-gold{
+  background:linear-gradient(135deg, var(--gold-400), var(--gold-500));
+  color:var(--plum-900);
+  box-shadow:var(--shadow-gold);
+}
+.inviteutsav-public-site .btn-gold:hover{ transform:translateY(-2px); box-shadow:0 18px 40px rgba(230,152,54,.35); }
+
+.inviteutsav-public-site .btn-ghost{
+  background:transparent;
+  color:var(--plum-800);
+  padding:.4rem 0;
+  border-radius:0;
+  position:relative;
+}
+/* The hover underline runs the width of the button itself by default
+   (unchanged, for any .btn-ghost that's just plain text) — but when the
+   text is wrapped in its own <span> (see e.g. page-invitation-editor.php's
+   "Remove this…" buttons), the underline is scoped to THAT span instead,
+   so a .btn-ghost stretched to fill a wider box (a grid cell spanning a
+   full row, for one) still only draws the line under the visible words,
+   not the whole box. :not(:has(span)) keeps the two rules from ever both
+   drawing a line on the same button. */
+.inviteutsav-public-site .btn-ghost:not(:has(span))::after{
+  content:"";
+  position:absolute; left:0; right:100%; bottom:-2px;
+  height:2px; background:var(--rose-500);
+  transition:right var(--dur-mid) var(--ease-premium);
+}
+.inviteutsav-public-site .btn-ghost:not(:has(span)):hover::after{ right:0; }
+.inviteutsav-public-site .btn-ghost > span{ position:relative; }
+.inviteutsav-public-site .btn-ghost > span::after{
+  content:"";
+  position:absolute; left:0; right:100%; bottom:-2px;
+  height:2px; background:var(--rose-500);
+  transition:right var(--dur-mid) var(--ease-premium);
+}
+.inviteutsav-public-site .btn-ghost:hover > span::after{ right:0; }
+
+.inviteutsav-public-site .btn-sm{ padding:.7rem 1.4rem; font-size:.86rem; }
+.inviteutsav-public-site .btn-block{ width:100%; }
+
+/* ---------------------------------------------------------------------- */
+/* Cards                                                                   */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .card{
+  background:var(--surface);
+  border-radius:var(--r-lg);
+  border:1px solid var(--line-soft);
+  box-shadow:var(--shadow-sm);
+  transition:transform var(--dur-mid) var(--ease-premium), box-shadow var(--dur-mid) var(--ease-premium);
+}
+.inviteutsav-public-site .card:hover{ transform:translateY(-6px); box-shadow:var(--shadow-lg); }
+
+.inviteutsav-public-site .badge{
+  display:inline-flex;
+  align-items:center;
+  gap:.4em;
+  padding:.4rem .9rem;
+  border-radius:var(--r-pill);
+  background:var(--champagne);
+  color:var(--wine-600);
+  border:1px solid rgb(0 0 0 / 25%);
+  font-size:.78rem;
+  font-weight:700;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+.inviteutsav-public-site .badge__icon{ width:14px; height:14px; flex-shrink:0; }
+.inviteutsav-public-site .badge.gold{ background:rgba(230,152,54,.14); color:var(--gold-500); }
+.inviteutsav-public-site .badge.rose{ background:rgba(230,35,90,.1); color:var(--rose-600); }
+
+/* ---------------------------------------------------------------------- */
+/* Filter pill bar (category/tag filters)                                 */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .filter-bar{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:.7rem;
+}
+.inviteutsav-public-site .filter-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:.5em;
+  padding:.75rem 1.4rem;
+  border-radius:var(--r-pill);
+  background:var(--surface);
+  border:1px solid var(--line);
+  color:var(--ink);
+  font-weight:600;
+  font-size:.92rem;
+  white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease-soft), color var(--dur-fast) var(--ease-soft), border-color var(--dur-fast) var(--ease-soft), transform var(--dur-fast) var(--ease-soft);
+}
+.inviteutsav-public-site .filter-pill svg{ width:15px; height:15px; }
+.inviteutsav-public-site .filter-pill:hover{ border-color:var(--plum-800); transform:translateY(-1px); }
+.inviteutsav-public-site .filter-pill.is-active{
+  background:var(--plum-900);
+  border-color:var(--plum-900);
+  color:#fff;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Forms                                                                   */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .field{ display:flex; flex-direction:column; gap:.5rem; margin-bottom:var(--sp-4); }
+.inviteutsav-public-site .field label{ font-size:.86rem; font-weight:700; color:var(--plum-800); }
+.inviteutsav-public-site .field input,
+.inviteutsav-public-site .field textarea,
+.inviteutsav-public-site .field select{
+  padding:.9rem 1.1rem;
+  border-radius:var(--r-sm);
+  border:1.5px solid var(--line);
+  color:var(--ink);
+  transition:border-color var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft);
+  background:#fff;
+}
+.inviteutsav-public-site .field input:focus,
+.inviteutsav-public-site .field textarea:focus,
+.inviteutsav-public-site .field select:focus{
+  outline:none;
+  border-color:var(--rose-500);
+  box-shadow:0 0 0 4px rgba(230,35,90,.12);
+}
+
+/* Shared phone-number field (country code + digits) — assets/js/phone-field.js.
+   All ~195 countries are listed; a native <select>'s own open dropdown
+   already scrolls on its own once the list is taller than the viewport,
+   no extra scroll CSS needed for that. */
+.inviteutsav-public-site .phone-field{ display:flex; gap:.5rem; }
+.inviteutsav-public-site .phone-field .phone-field__code{ flex:0 0 auto; width:auto; max-width:11em; padding-inline:.6rem; }
+.inviteutsav-public-site .phone-field .phone-field__number{ flex:1; min-width:0; }
+
+/* Show/Hide toggle for any password field — wrap the input in
+   .field-password-wrap and add a .field-password-toggle button after it
+   (see page-login.php / template-parts/auth-modal.php); assets/js/password-toggle.js
+   is the one place that wires the click behavior for every instance. */
+.inviteutsav-public-site .field-password-wrap{ position:relative; }
+.inviteutsav-public-site .field-password-wrap input{ width:100%; padding-right:2.8rem; }
+.inviteutsav-public-site .field-password-toggle{
+  position:absolute; top:50%; right:.4rem; transform:translateY(-50%);
+  width:2.2rem; height:2.2rem; display:flex; align-items:center; justify-content:center;
+  background:transparent; border:none; border-radius:50%; color:var(--ink-soft); cursor:pointer;
+}
+.inviteutsav-public-site .field-password-toggle:hover{ background:var(--champagne); }
+.inviteutsav-public-site .field-password-toggle svg{ width:20px; height:20px; }
+.inviteutsav-public-site .field-password-toggle__eye-off{ display:none; }
+.inviteutsav-public-site .field-password-toggle.is-visible .field-password-toggle__eye{ display:none; }
+.inviteutsav-public-site .field-password-toggle.is-visible .field-password-toggle__eye-off{ display:block; }
+
+/* ---------------------------------------------------------------------- */
+/* Scroll-reveal utility (driven by IntersectionObserver in main.js)      */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site [data-reveal]{
+  opacity:0;
+  transform:translateY(28px);
+  transition:opacity 1s var(--ease-premium), transform 1s var(--ease-premium);
+}
+.inviteutsav-public-site [data-reveal].is-visible{ opacity:1; transform:none; }
+.inviteutsav-public-site [data-reveal="fade"]{ transform:none; }
+.inviteutsav-public-site [data-reveal-delay="1"]{ transition-delay:.1s; }
+.inviteutsav-public-site [data-reveal-delay="2"]{ transition-delay:.2s; }
+.inviteutsav-public-site [data-reveal-delay="3"]{ transition-delay:.3s; }
+.inviteutsav-public-site [data-reveal-delay="4"]{ transition-delay:.4s; }
+
+/* ---------------------------------------------------------------------- */
+/* Decorative petal / motif utility                                       */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .motif{
+  position:absolute;
+  pointer-events:none;
+  opacity:.5;
+  z-index:0;
+}
+.inviteutsav-public-site .petal-drift{ animation:petalDrift var(--dur, 9s) ease-in-out infinite; }
+@keyframes petalDrift{
+  0%,100%{ transform:translate(0,0) rotate(0deg); }
+  50%{ transform:translate(var(--dx, 0px), var(--dy, -16px)) rotate(var(--rot, 6deg)); }
+}
+.inviteutsav-public-site .glow-soft{ animation:glowPulse 6s ease-in-out infinite; }
+@keyframes glowPulse{
+  0%,100%{ opacity:.35; }
+  50%{ opacity:.6; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Divider ornament                                                       */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .ornament{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:var(--sp-3);
+  margin:0 auto var(--sp-6);
+}
+.inviteutsav-public-site .ornament .line{ width:48px; height:1px; background:var(--line); }
+.inviteutsav-public-site .ornament .dot{ width:6px; height:6px; border-radius:50%; background:var(--gold-400); }
+
+/* ---------------------------------------------------------------------- */
+/* Preloader                                                               */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .preloader{
+  position:fixed; inset:0; z-index:9999;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--ivory);
+  transition:opacity .5s var(--ease-soft), visibility .5s var(--ease-soft);
+}
+.inviteutsav-public-site .preloader__logo{
+  width:150px; max-width:50vw; height:auto;
+  opacity:0;
+  transform:scale(.92);
+  animation:preloaderReveal 1s var(--ease-premium) forwards;
+}
+@keyframes preloaderReveal{
+  0%{ opacity:0; transform:scale(.9); }
+  65%{ opacity:1; transform:scale(1.02); }
+  100%{ opacity:1; transform:scale(1); }
+}
+.inviteutsav-public-site .preloader.is-hidden{ opacity:0; visibility:hidden; pointer-events:none; }
+
+/* Subtle one-time header logo entrance (not a looping animation) */
+.inviteutsav-public-site .brand__logo{ animation:logoEntrance .8s var(--ease-premium) .25s both; }
+@keyframes logoEntrance{
+  0%{ opacity:0; transform:translateY(-6px) scale(.96); }
+  100%{ opacity:1; transform:translateY(0) scale(1); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* View Demo popup — screenshot content only                              */
+/* ---------------------------------------------------------------------- */
+/* The popup's own chrome (backdrop/panel/toolbar/close button/frame
+   sizing) is NOT styled here — assets/js/main.js's buildDemoModal() emits
+   the exact same .editor-preview-modal* classes as the real invitation-
+   editor Preview modal (style.css), so it's visually identical by
+   construction rather than a separately-maintained lookalike. The real
+   editor Preview (page-invitation-editor.php's #editorPreviewModal) now
+   shares this exact same screenshot-stack rendering too — see
+   assets/js/invitation-editor.js — so both use the classes below.
+
+   Full-page screenshot viewport scroll/sizing rules live in style.css
+   (.demo-modal__screenshot-viewport) — that file is enqueued AFTER this
+   one, so a same-specificity override placed here would lose to style.css's
+   own .device-frame__screen{overflow:hidden}. */
+.inviteutsav-public-site .demo-modal__screenshot{ display:block; width:100%; height:auto; }
+.inviteutsav-public-site .demo-modal__placeholder{
+  height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.6rem;
+  color:var(--ink-soft,#6b6b6b); text-align:center; padding:1.5rem;
+}
+.inviteutsav-public-site .demo-modal__placeholder svg{ opacity:.5; }
+.inviteutsav-public-site .demo-modal__placeholder p{ font-size:.86rem; font-weight:600; margin:0; }
+
+/* Editor Preview's own loading/error states (assets/js/invitation-editor.js
+   fetchPreviewDevice()) — the server-render round-trip (2-5s target) needs
+   a real loading state, and a failed render must never expose a technical
+   error, only a plain retry (see inc/preview-render.php's doc comment). */
+.inviteutsav-public-site .editor-preview-status{
+  height:100%; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.9rem;
+  color:var(--ink-soft,#6b6b6b); text-align:center; padding:1.5rem;
+}
+.inviteutsav-public-site .editor-preview-status p{ font-size:.86rem; font-weight:600; margin:0; }
+.inviteutsav-public-site .editor-preview-status--error p{ color:var(--rose-600); }
+.inviteutsav-public-site .editor-preview-spinner{
+  width:34px; height:34px; border-radius:50%;
+  border:3px solid var(--line); border-top-color:var(--rose-500);
+  animation:editorPreviewSpin .8s linear infinite;
+}
+@keyframes editorPreviewSpin{ to{ transform:rotate(360deg); } }
+
+/* Contact popup — its own overlay/backdrop pattern (fixed inset + fade),
+   with a light scrollable panel since it holds a form rather than a
+   phone-frame demo. See template-parts/contact-modal.php + main.js's
+   initContactModal().
+   pointer-events:none while closed (not just opacity/visibility): WPForms'
+   own CSS forces `visibility:visible` on its .wpforms-container-full
+   wrapper, which overrides the visibility:hidden this element sets on its
+   WPForms-embedding descendants — invisible on screen either way (opacity
+   still applies normally), but without pointer-events:none that embedded
+   form content stays clickable/hit-testable through the invisible overlay,
+   silently blocking clicks on whatever page is underneath it. */
+.inviteutsav-public-site .contact-modal{
+  position:fixed; inset:0; z-index:300;
+  display:flex; align-items:center; justify-content:center;
+  padding:2rem 1rem;
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity var(--dur-mid) var(--ease-soft), visibility var(--dur-mid);
+}
+.inviteutsav-public-site .contact-modal.is-open{ opacity:1; visibility:visible; pointer-events:auto; }
+.inviteutsav-public-site .contact-modal__backdrop{
+  position:absolute; inset:0;
+  background:rgba(42,1,31,.78);
+  backdrop-filter:blur(6px);
+}
+.inviteutsav-public-site .contact-modal__panel{
+  position:relative; z-index:1;
+  width:100%; max-width:560px;
+  max-height:88vh; overflow-y:auto;
+  background:var(--bg,#fff); border-radius:var(--r-xl,20px);
+  padding:2.4rem 2rem;
+  transform:scale(.94) translateY(10px);
+  transition:transform var(--dur-mid) var(--ease-premium);
+}
+.inviteutsav-public-site .contact-modal.is-open .contact-modal__panel{ transform:scale(1) translateY(0); }
+.inviteutsav-public-site .contact-modal__close{
+  position:absolute; top:1rem; right:1rem;
+  width:36px; height:36px; border-radius:50%;
+  background:var(--bg-alt,rgba(0,0,0,.06)); color:var(--ink,#2a011f); border:none;
+  font-size:1.3rem; line-height:1; display:flex; align-items:center; justify-content:center;
+  transition:background var(--dur-fast);
+}
+.inviteutsav-public-site .contact-modal__close:hover{ background:rgba(0,0,0,.12); }
+.inviteutsav-public-site .contact-modal__panel h3{ margin:0 2.2rem .5rem 0; }
+.inviteutsav-public-site .contact-modal__intro{ color:var(--ink-soft,inherit); margin:0 0 1.4rem; }
+
+/* ---------------------------------------------------------------------- */
+/* Upgrade Plan popup (page-invitation-editor.php + invitation-editor.js) */
+/* Same overlay/backdrop/panel pattern as .contact-modal above — a         */
+/* content-heavy, scrollable card list rather than a device-frame, so it   */
+/* deliberately does NOT reuse .editor-preview-modal (that one is tuned    */
+/* for a single fixed-aspect-ratio frame, not a variable-length card grid).*/
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .upgrade-plan-modal{
+  position:fixed; inset:0; z-index:10001;
+  display:flex; align-items:center; justify-content:center;
+  padding:2rem 1rem;
+  opacity:0; visibility:hidden;
+  transition:opacity var(--dur-mid) var(--ease-soft), visibility var(--dur-mid);
+}
+.inviteutsav-public-site .upgrade-plan-modal.is-open{ opacity:1; visibility:visible; }
+.inviteutsav-public-site .upgrade-plan-modal__backdrop{ position:absolute; inset:0; background:rgba(42,1,31,.78); backdrop-filter:blur(6px); }
+.inviteutsav-public-site .upgrade-plan-modal__panel{
+  position:relative; z-index:1;
+  width:100%; max-width:1100px; max-height:88vh; overflow-y:auto;
+  background:var(--bg,#fff); border-radius:var(--r-xl,20px);
+  padding:2.4rem 2rem;
+  transform:scale(.94) translateY(10px);
+  transition:transform var(--dur-mid) var(--ease-premium);
+}
+.inviteutsav-public-site .upgrade-plan-modal.is-open .upgrade-plan-modal__panel{ transform:scale(1) translateY(0); }
+.inviteutsav-public-site .upgrade-plan-modal__close{
+  position:absolute; top:1rem; right:1rem;
+  width:36px; height:36px; border-radius:50%;
+  background:var(--bg-alt,rgba(0,0,0,.06)); color:var(--ink,#2a011f); border:none;
+  font-size:1.3rem; line-height:1; display:flex; align-items:center; justify-content:center;
+  transition:background var(--dur-fast);
+}
+.inviteutsav-public-site .upgrade-plan-modal__close:hover{ background:rgba(0,0,0,.12); }
+.inviteutsav-public-site .upgrade-plan-modal__current{ font-size:1.1rem; margin:0 2.2rem .3rem 0; }
+.inviteutsav-public-site .upgrade-plan-modal__current strong{ color:var(--plum-800); }
+.inviteutsav-public-site .upgrade-plan-modal__hint{ color:var(--ink-soft,inherit); margin:0 0 1.6rem; }
+.inviteutsav-public-site .upgrade-plan-modal__cards{
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:var(--sp-4,1rem);
+}
+.inviteutsav-public-site .upgrade-plan-card{
+  position:relative;
+  border:1px solid var(--line,rgba(0,0,0,.1)); border-radius:var(--r-lg,16px);
+  padding:1.4rem 1.2rem; display:flex; flex-direction:column; gap:.7rem;
+}
+/* Premium (inc/pricing-plans.php's inviteutsav_featured_recommended_tier())
+   stands out using the exact same "featured" treatment as the template
+   detail page's own plan comparison (.price-card--popular / .price-card__tag
+   in style.css) — dark filled card + a pill tag centered on the top edge —
+   so the recommended plan reads identically wherever a customer sees it. */
+.inviteutsav-public-site .upgrade-plan-card--recommended{
+  background:var(--plum-800); color:#fff; border-color:transparent;
+  box-shadow:var(--shadow-lg, 0 14px 30px -14px rgba(0,0,0,.35));
+  padding-top:1.8rem;
+}
+.inviteutsav-public-site .upgrade-plan-card--recommended .upgrade-plan-card__head h3,
+.inviteutsav-public-site .upgrade-plan-card--recommended .upgrade-plan-card__price{ color:#fff; }
+.inviteutsav-public-site .upgrade-plan-card--recommended .upgrade-plan-card__plus,
+.inviteutsav-public-site .upgrade-plan-card--recommended .upgrade-plan-card__benefits li{ color:rgba(255,255,255,.75); }
+.inviteutsav-public-site .upgrade-plan-card--recommended .upgrade-plan-card__benefits li::before{ color:var(--gold-400); }
+.inviteutsav-public-site .upgrade-plan-card__ribbon{
+  position:absolute; top:-14px; left:50%; transform:translateX(-50%); z-index:1;
+  background:var(--gold-400); color:var(--plum-900);
+  font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em;
+  padding:.35rem 1rem; border-radius:var(--r-pill, 999px); white-space:nowrap;
+}
+.inviteutsav-public-site .upgrade-plan-card__head{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }
+.inviteutsav-public-site .upgrade-plan-card__head h3{ font-family:var(--font-display); font-size:1.1rem; margin:0; color:var(--plum-800); }
+.inviteutsav-public-site .upgrade-plan-card__price{ font-weight:700; color:var(--rose-600); white-space:nowrap; }
+.inviteutsav-public-site .upgrade-plan-card__plus{ font-size:.78rem; font-weight:700; letter-spacing:.02em; color:var(--ink-soft,inherit); margin:0; }
+.inviteutsav-public-site .upgrade-plan-card__benefits{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.35rem; flex:1; }
+.inviteutsav-public-site .upgrade-plan-card__benefits li{ font-size:.84rem; padding-left:1.1rem; position:relative; }
+.inviteutsav-public-site .upgrade-plan-card__benefits li::before{ content:"✓"; position:absolute; left:0; color:var(--rose-600); font-weight:700; }
+.inviteutsav-public-site .upgrade-plan-card__select{ width:100%; margin-top:auto; }
+.inviteutsav-public-site .upgrade-plan-modal__empty{ text-align:center; color:var(--ink-soft,inherit); padding:1.5rem 0; }
+.inviteutsav-public-site .upgrade-plan-modal__confirm{
+  display:flex; flex-direction:column; align-items:center; gap:.3rem;
+  text-align:center; padding:2rem 1rem;
+}
+.inviteutsav-public-site .upgrade-plan-modal__confirm-emoji{ font-size:2.4rem; line-height:1; margin-bottom:.4rem; }
+.inviteutsav-public-site .upgrade-plan-modal__confirm-title{ font-family:var(--font-display); font-size:1.4rem; color:var(--plum-800); }
+.inviteutsav-public-site .upgrade-plan-modal__confirm-plan{ font-size:1.05rem; color:var(--ink); }
+.inviteutsav-public-site .upgrade-plan-modal__confirm-price{ font-family:var(--font-display); font-size:1.6rem; font-weight:700; color:var(--rose-600); margin:.2rem 0; }
+.inviteutsav-public-site .upgrade-plan-modal__confirm-note{ font-size:.88rem; color:var(--ink-soft,inherit); margin-top:.3rem; }
+@media (max-width:640px){
+  .inviteutsav-public-site .upgrade-plan-modal__panel{ padding:1.8rem 1.2rem; }
+  .inviteutsav-public-site .upgrade-plan-modal__cards{ grid-template-columns:1fr; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Back to top                                                             */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .back-to-top{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(12px);
+  z-index:90;
+  width:46px; height:46px; border-radius:50%;
+  background:var(--plum-800); color:#fff;
+  display:none; align-items:center; justify-content:center;
+  box-shadow:var(--shadow-md);
+  opacity:0; pointer-events:none;
+  transition:opacity var(--dur-fast) var(--ease-soft), transform var(--dur-fast) var(--ease-soft);
+}
+.inviteutsav-public-site .back-to-top svg{ width:20px; height:20px; }
+.inviteutsav-public-site .back-to-top.is-visible{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+.inviteutsav-public-site .back-to-top:hover{ background:var(--rose-500); }
+@media (min-width: 681px){
+  .inviteutsav-public-site .back-to-top{ display:flex; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Visually hidden (a11y)                                                  */
+/* ---------------------------------------------------------------------- */
+.inviteutsav-public-site .visually-hidden{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}

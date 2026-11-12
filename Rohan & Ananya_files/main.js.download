@@ -1,0 +1,1077 @@
+/* ==========================================================================
+   InviteUtsav — main.js
+   Pure vanilla JS: no frameworks, no libraries.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var yearEl = document.getElementById('year');
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  function trackEvent(name, data) {
+    try {
+      if (window.iuTrackEvent) window.iuTrackEvent(name, data);
+    } catch (e) {}
+  }
+
+  // start_personalization — any CTA that begins creating/personalizing a
+  // new invitation from a template goes through /dashboard/?action=start&...
+  // (see page-dashboard.php), so a delegated listener keyed on that query
+  // param covers every "Personalize"/"Choose {Plan}" button site-wide
+  // without needing a data attribute on each one.
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('a[href*="action=start"]');
+    if (link) {
+      trackEvent('start_personalization', { url: link.href });
+    }
+  });
+
+  // whatsapp_support_click — the site-wide "Chat on WhatsApp" support
+  // entry points (footer floating button, mobile sticky bar), distinct
+  // from share_whatsapp (a guest re-sharing an already-live invitation —
+  // a different action/meaning in the funnel).
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-whatsapp-support]')) {
+      trackEvent('whatsapp_support_click', {});
+    }
+  });
+
+  // live_demo_click — a plain <a href="/demo/{slug}/"> link straight to a
+  // real invitation (not the popup trigger button, tracked separately as
+  // template_demo_open above/below).
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('a[href*="/demo/"]');
+    if (link) {
+      trackEvent('live_demo_click', { url: link.href });
+    }
+  });
+
+  // demo_create_for_me_click — the "Create It For Me" WhatsApp CTA shown
+  // only on a demo invitation's own sticky bar (footer-invite-immersive.php),
+  // distinct from the generic site-wide whatsapp_support_click above.
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.demo-invite-cta__actions a[href*="wa.me"]')) {
+      trackEvent('demo_create_for_me_click', { url: window.location.href });
+    }
+  });
+
+  /* ---------------------------------------------------------------- */
+  /* Preloader — hide once the page (images/fonts included) is ready   */
+  /* ---------------------------------------------------------------- */
+  var preloader = document.getElementById('preloader');
+  if (preloader) {
+    var hidePreloader = function () {
+      preloader.classList.add('is-hidden');
+      preloader.addEventListener('transitionend', function () {
+        preloader.style.display = 'none';
+      }, { once: true });
+    };
+    if (document.readyState === 'complete') {
+      hidePreloader();
+    } else {
+      window.addEventListener('load', hidePreloader);
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Sticky header shadow on scroll                                    */
+  /* ---------------------------------------------------------------- */
+  var header = document.getElementById('siteHeader');
+  function onScrollHeader() {
+    if (header) header.classList.toggle('is-scrolled', window.scrollY > 8);
+  }
+  onScrollHeader();
+  window.addEventListener('scroll', onScrollHeader, { passive: true });
+
+  // Keep the mobile nav's top offset in sync with the header's real
+  // rendered height (it varies slightly with viewport width and once
+  // webfonts swap in).
+  function syncHeaderHeight() {
+    if (header) document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+  }
+  syncHeaderHeight();
+  window.addEventListener('resize', syncHeaderHeight);
+  window.addEventListener('load', syncHeaderHeight);
+
+  /* ---------------------------------------------------------------- */
+  /* Mobile nav toggle                                                  */
+  /* ---------------------------------------------------------------- */
+  var navToggle = document.getElementById('navToggle');
+  var mainNav = document.getElementById('mainNav');
+
+  // Chromeless pages (e.g. the guest invitation template's immersive header)
+  // render without the standard site nav, so these elements won't exist there.
+  if (navToggle && mainNav) {
+    navToggle.addEventListener('click', function () {
+      var isOpen = mainNav.classList.toggle('is-open');
+      navToggle.classList.toggle('is-open', isOpen);
+      navToggle.setAttribute('aria-expanded', String(isOpen));
+      document.body.style.overflow = isOpen ? 'hidden' : '';
+    });
+
+    // Toggle the Celebrations dropdown on tap when the mobile menu is open.
+    mainNav.querySelectorAll('.has-dropdown > a').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        if (window.innerWidth <= 960) {
+          e.preventDefault();
+          link.parentElement.classList.toggle('is-open');
+        }
+      });
+    });
+
+    // Close the mobile menu after tapping any other nav link.
+    mainNav.querySelectorAll('a:not(.has-dropdown > a)').forEach(function (link) {
+      link.addEventListener('click', function () {
+        mainNav.classList.remove('is-open');
+        navToggle.classList.remove('is-open');
+        navToggle.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Scroll-reveal animations                                          */
+  /* ---------------------------------------------------------------- */
+  var revealEls = document.querySelectorAll('[data-reveal]');
+  if ('IntersectionObserver' in window) {
+    var revealObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
+
+    // A section already inside the viewport at page load (e.g. the browser
+    // landed here via an in-page #anchor link, like "Choose Your Plan" →
+    // #plan-comparison) can fail to ever fire its first IntersectionObserver
+    // callback on some WebKit/iOS builds — the element never becomes
+    // .is-visible and stays permanently opacity:0, reading as a blank
+    // section. Checking each element's own position immediately, before
+    // ever asking the observer, sidesteps that instead of depending on it.
+    var viewportH = window.innerHeight || document.documentElement.clientHeight;
+    revealEls.forEach(function (el) {
+      var rect = el.getBoundingClientRect();
+      if (rect.top < viewportH && rect.bottom > 0) {
+        el.classList.add('is-visible');
+      } else {
+        revealObserver.observe(el);
+      }
+    });
+  } else {
+    revealEls.forEach(function (el) { el.classList.add('is-visible'); });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* FAQ accordion                                                      */
+  /* ---------------------------------------------------------------- */
+  document.querySelectorAll('.faq-item__q').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var item = btn.closest('.faq-item');
+      var answer = item.querySelector('.faq-item__a');
+      var isOpen = btn.getAttribute('aria-expanded') === 'true';
+
+      // Close all others (single-open accordion)
+      document.querySelectorAll('.faq-item__q').forEach(function (otherBtn) {
+        if (otherBtn !== btn) {
+          otherBtn.setAttribute('aria-expanded', 'false');
+          otherBtn.closest('.faq-item').querySelector('.faq-item__a').style.maxHeight = null;
+        }
+      });
+
+      btn.setAttribute('aria-expanded', String(!isOpen));
+      answer.style.maxHeight = isOpen ? null : answer.scrollHeight + 'px';
+    });
+  });
+
+  /* ---------------------------------------------------------------- */
+  /* Home showcase phone — cycles between a few real template          */
+  /* screenshots (front-page.php), each already auto-scrolling on its   */
+  /* own via assets/js/screenshot-autoscroll.js ([data-autoscroll]).    */
+  /* ---------------------------------------------------------------- */
+  var showcaseScreens = document.querySelectorAll('.showcase__screenshot');
+  if (showcaseScreens.length > 1) {
+    var showcaseIndex = 0;
+    setInterval(function () {
+      showcaseScreens[showcaseIndex].hidden = true;
+      showcaseScreens[showcaseIndex].classList.remove('is-active');
+      showcaseIndex = (showcaseIndex + 1) % showcaseScreens.length;
+      showcaseScreens[showcaseIndex].hidden = false;
+      showcaseScreens[showcaseIndex].classList.add('is-active');
+    }, 6000);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Home hero phone mockup — smooth crossfade between each published   */
+  /* template's own square preview photo (preview_hero_square, same     */
+  /* images as the template detail page's hero — see class-hero.php),   */
+  /* looping continuously. Pure opacity fade (no hide/show swap) since  */
+  /* that's what makes it "fade" rather than "cut" between images.      */
+  /* ---------------------------------------------------------------- */
+  var heroPhotos = document.querySelectorAll('.hero-photo-carousel__img');
+  if (heroPhotos.length > 1) {
+    var heroPhotoIndex = 0;
+    setInterval(function () {
+      heroPhotos[heroPhotoIndex].classList.remove('is-active');
+      heroPhotoIndex = (heroPhotoIndex + 1) % heroPhotos.length;
+      heroPhotos[heroPhotoIndex].classList.add('is-active');
+    }, 3500);
+  }
+
+  /* Showcase section — identical crossfade pattern to the Hero's own
+     carousel above, but a separate element pool/index/interval so the two
+     carousels cycle independently rather than sharing one shared index. */
+  var showcasePhotos = document.querySelectorAll('.showcase-photo-carousel__img');
+  if (showcasePhotos.length > 1) {
+    var showcasePhotoIndex = 0;
+    setInterval(function () {
+      showcasePhotos[showcasePhotoIndex].classList.remove('is-active');
+      showcasePhotoIndex = (showcasePhotoIndex + 1) % showcasePhotos.length;
+      showcasePhotos[showcasePhotoIndex].classList.add('is-active');
+    }, 3500);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Clean YouTube embed — shared by every REAL invitation template's    */
+  /* own Pre-Wedding Video section (a customer-uploaded YouTube link,    */
+  /* entered in the invitation editor — a separate feature from the      */
+  /* admin's own self-hosted MP4 template-demo video above, which is     */
+  /* never YouTube at all). Exposed globally since each template has     */
+  /* its own separate JS file (wedding-01.js, letter-theme.js, etc.)     */
+  /* that all depend on this one loading first (see                     */
+  /* single-invitation-public.php's wp_enqueue_script() deps). Hides     */
+  /* YouTube's own control bar/logo/title entirely (controls=0 etc.) and */
+  /* replaces it with a transparent tap-to-toggle overlay using OUR OWN  */
+  /* circular icon — the guest's pointer never reaches YouTube's actual  */
+  /* surface. Call this only from a real click handler (a real user      */
+  /* gesture is what lets autoplay=1 succeed, with sound).               */
+  /* ---------------------------------------------------------------- */
+  (function () {
+    var youTubeApiPromise = null;
+    function loadYouTubeIframeApi() {
+      if (window.YT && window.YT.Player) return Promise.resolve();
+      if (youTubeApiPromise) return youTubeApiPromise;
+      youTubeApiPromise = new Promise(function (resolve) {
+        var previousReady = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = function () {
+          if (typeof previousReady === 'function') previousReady();
+          resolve();
+        };
+        var script = document.createElement('script');
+        script.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(script);
+      });
+      return youTubeApiPromise;
+    }
+
+    /* One audio source at a time: while any YouTube embed is active the
+       invitation's background music (every <audio> on the page) is paused
+       and kept paused — templates that start music on the guest's first
+       tap (the same tap that hits the video's play arrow, which is what
+       made both play together on Android) are blocked by the capture
+       listener below. When the last active video pauses/ends the music
+       resumes from where it stopped, if it was playing (or wanted to) and
+       the page is visible; otherwise it waits for the page to be visible. */
+    var MUSIC_BUTTONS = '#musicToggle,#musicBtn,.music-toggle,.music-btn,.music-orb,.pd-music,.siyaram-music,.iu-music-fab';
+    var activeVideos = {};
+    var musicHeld = [];       // <audio> elements we paused for the video
+    var resumeWanted = false; // music was playing, or tried to start, during the video
+
+    function anyVideoActive() {
+      var any = false;
+      Object.keys(activeVideos).forEach(function (id) {
+        if (document.getElementById(id)) { any = true; } else { delete activeVideos[id]; }
+      });
+      return any;
+    }
+    function syncMusicButtons(playing) {
+      document.querySelectorAll(MUSIC_BUTTONS).forEach(function (btn) {
+        if (btn.hasAttribute('aria-pressed')) { btn.setAttribute('aria-pressed', playing ? 'true' : 'false'); }
+        btn.classList.toggle('playing', playing);
+        btn.classList.toggle('is-playing', playing);
+        btn.classList.toggle('is-paused', !playing);
+      });
+    }
+    function holdMusic() {
+      var paused = false;
+      document.querySelectorAll('audio').forEach(function (a) {
+        if (a.paused) { return; }
+        if (musicHeld.indexOf(a) === -1) { musicHeld.push(a); }
+        resumeWanted = true;
+        a.pause();
+        paused = true;
+      });
+      if (paused) { syncMusicButtons(false); }
+    }
+    function resumeMusic() {
+      if (!resumeWanted || anyVideoActive()) { return; }
+      if (document.hidden) { return; } // visibilitychange below retries
+      var list = musicHeld;
+      musicHeld = [];
+      resumeWanted = false;
+      list.forEach(function (a) {
+        var p = a.play();
+        if (p && p.then) {
+          p.then(function () { syncMusicButtons(true); }).catch(function () { /* autoplay rules: guest taps the music button */ });
+        }
+      });
+    }
+    function videoStarted(id) {
+      activeVideos[id] = true;
+      holdMusic();
+    }
+    function videoStopped(id) {
+      delete activeVideos[id];
+      resumeMusic();
+    }
+    // A template (or the shared music button) trying to start music while a video is active is stopped at once.
+    document.addEventListener('play', function (e) {
+      if (!e.target || e.target.tagName !== 'AUDIO' || !anyVideoActive()) { return; }
+      if (musicHeld.indexOf(e.target) === -1) { musicHeld.push(e.target); }
+      resumeWanted = true;
+      e.target.pause();
+      syncMusicButtons(false);
+    }, true);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { resumeMusic(); }
+    });
+    // A video that is closed (its player removed from the page, e.g. a modal) gives the music back too.
+    if (window.MutationObserver && document.body) {
+      new MutationObserver(function () {
+        if (resumeWanted) { resumeMusic(); }
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+
+    // For templates that build their own YouTube iframe (src needs enablejsapi=1): gives it the same one-audio-at-a-time behaviour.
+    window.inviteutsavWatchYouTube = function (iframe) {
+      if (!iframe.id) { iframe.id = 'watchVideo_' + Date.now(); }
+      var id = iframe.id;
+      videoStarted(id);
+      loadYouTubeIframeApi().then(function () {
+        new window.YT.Player(id, {
+          events: {
+            onStateChange: function (e) {
+              var S = window.YT.PlayerState;
+              if (e.data === S.PLAYING || e.data === S.BUFFERING) { videoStarted(id); }
+              else if (e.data === S.PAUSED || e.data === S.ENDED) { videoStopped(id); }
+            }
+          }
+        });
+      });
+    };
+
+    // Replaces `container`'s entire content with the clean embed (so it's
+    // meant to be called on the same element that held the thumbnail/play
+    // trigger, swapping one for the other). `opts.onStateChange`, if given,
+    // is called with 'playing' | 'paused' | 'ended' — e.g. wedding-01.js
+    // uses this to duck its own background music around video playback.
+    window.inviteutsavCleanYouTubeEmbed = function (container, videoId, title, opts) {
+      opts = opts || {};
+      container.style.position = 'relative';
+
+      var iframe = document.createElement('iframe');
+      iframe.id = 'cleanVideo_' + videoId + '_' + Date.now();
+      iframe.style.cssText = 'display:block;width:100%;height:100%;border:none;';
+      // controls=0, modestbranding, rel=0 and iv_load_policy=3 strip every
+      // piece of chrome the embed API honors; enablejsapi + origin are
+      // what let the IFrame Player API below attach to this exact iframe
+      // for the tap-to-pause layer just below.
+      iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId) +
+        '?autoplay=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&playsinline=1&enablejsapi=1&origin=' + encodeURIComponent(window.location.origin);
+      iframe.title = title || 'Video';
+      iframe.setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture');
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+
+      var tapLayer = document.createElement('button');
+      tapLayer.type = 'button';
+      tapLayer.className = 'clean-video__tap';
+      tapLayer.setAttribute('aria-label', 'Play or pause video');
+      tapLayer.innerHTML = '<span class="demo-modal__video-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>';
+
+      container.innerHTML = '';
+      container.appendChild(iframe);
+      container.appendChild(tapLayer);
+
+      var player = null;
+      var iframeId = iframe.id;
+      // The embed is only ever created from the guest's tap on the play arrow
+      // (autoplay=1 starts it), so music stops right now, in that same gesture.
+      videoStarted(iframeId);
+      loadYouTubeIframeApi().then(function () {
+        player = new window.YT.Player(iframeId, {
+          events: {
+            onStateChange: function (e) {
+              var isPlaying = e.data === window.YT.PlayerState.PLAYING;
+              tapLayer.classList.toggle('is-playing', isPlaying);
+              if (isPlaying || e.data === window.YT.PlayerState.BUFFERING) { videoStarted(iframeId); }
+              else if (e.data === window.YT.PlayerState.PAUSED || e.data === window.YT.PlayerState.ENDED) { videoStopped(iframeId); }
+              if (typeof opts.onStateChange !== 'function') return;
+              if (isPlaying) opts.onStateChange('playing');
+              else if (e.data === window.YT.PlayerState.PAUSED) opts.onStateChange('paused');
+              else if (e.data === window.YT.PlayerState.ENDED) opts.onStateChange('ended');
+            }
+          }
+        });
+      });
+
+      // If the phone refuses to start the video, give the music back instead of leaving the page silent.
+      setTimeout(function () {
+        if (!player || typeof player.getPlayerState !== 'function') { return; }
+        var s = player.getPlayerState();
+        if (s !== window.YT.PlayerState.PLAYING && s !== window.YT.PlayerState.BUFFERING) { videoStopped(iframeId); }
+      }, 8000);
+
+      tapLayer.addEventListener('click', function () {
+        if (!player || typeof player.getPlayerState !== 'function') return;
+        if (player.getPlayerState() === window.YT.PlayerState.PLAYING) {
+          player.pauseVideo();
+          videoStopped(iframeId); // inside the tap, so iOS lets the music resume
+        } else {
+          videoStarted(iframeId);
+          player.playVideo();
+        }
+      });
+    };
+  })();
+
+  /* ---------------------------------------------------------------- */
+  /* View Demo modal — triggered from every "View Demo" / "See Details" */
+  /* button site-wide. Loads the template's actual Live Demo URL (set on */
+  /* the invitation_template admin screen) inside an iframe, scaled to   */
+  /* a real device viewport — never a recorded video. Inside the same    */
+  /* device-frame chrome as the invitation editor's real Preview modal   */
+  /* (assets/js/invitation-editor.js). The URL comes from the trigger    */
+  /* element's own data-demo-iframe-url attribute                        */
+  /* (template-parts/template-card.php / single-invitation_template.php),*/
+  /* so nothing is fetched for any template until its popup is opened.   */
+  /* ---------------------------------------------------------------- */
+
+  // Each possible tab's label/icon/device-frame bezel — Mobile/Tablet are
+  // offered in the popup (see openModal()), Laptop only ever appears via
+  // "Full Preview" opening the same URL in a new tab at full width.
+  var DEMO_VIEWS = {
+    mobile: { label: 'Mobile', frame: 'mobile', icon: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 9.5v5l4-2.5-4-2.5z" fill="currentColor" stroke="none"/>' },
+    tablet: { label: 'Tablet', frame: 'tablet', icon: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M10 9.5v5l4-2.5-4-2.5z" fill="currentColor" stroke="none"/>' },
+    laptop: { label: 'Laptop', frame: 'laptop', icon: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M2 19h20"/>' }
+  };
+
+  // Real device CSS-pixel viewports for the iframe (live-demo) mode —
+  // identical technique/shape to invitation-editor.js's own
+  // PREVIEW_DEVICE_DIMENSIONS/applyPreviewScale(): the iframe always
+  // renders the real page at one of these exact widths (so its own
+  // responsive breakpoints fire correctly) and is only ever shrunk with a
+  // uniform transform:scale() to fit the popup — never resized/reloaded.
+  var DEMO_DEVICE_DIMENSIONS = {
+    mobile: { width: 390, height: 844 },
+    tablet: { width: 768, height: 1024 },
+    laptop: { width: 1366, height: 800 }
+  };
+
+  function deviceSwitcherHtml(viewKeys, activeKey) {
+    return viewKeys.map(function (key) {
+      var d = DEMO_VIEWS[key];
+      return '<button type="button" class="editor-preview-device' + (key === activeKey ? ' is-active' : '') + '" data-device="' + key + '" aria-label="' + d.label + '">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' + d.icon + '</svg><span>' + d.label + '</span></button>';
+    }).join('');
+  }
+
+  // Builds the View Demo popup using the EXACT SAME classes as the real
+  // invitation-editor Preview modal (page-invitation-editor.php's
+  // #editorPreviewModal) — not a lookalike skin. That modal never exists
+  // on the same page as this one (it's editor-only, this one is
+  // templates-listing/detail-only), so sharing class names is safe and
+  // guarantees the two can never visually drift apart: transparent
+  // shrink-wrapped panel, floating device switcher, floating close button,
+  // dimmed backdrop — no separate white toolbar bar or boxed dark void.
+  // The device switcher itself starts empty — openModal() fills it fresh
+  // on every open (Mobile-only under 480px, Mobile+Tablet otherwise).
+  function buildDemoModal() {
+    var modal = document.createElement('div');
+    modal.className = 'editor-preview-modal';
+    modal.id = 'demoModal';
+    modal.setAttribute('aria-hidden', 'true');
+
+    modal.innerHTML =
+      '<div class="editor-preview-modal__backdrop" data-close></div>' +
+      '<div class="editor-preview-modal__panel">' +
+        '<button class="editor-preview-modal__close" data-close aria-label="Close demo">&times;</button>' +
+        '<div class="editor-preview-modal__toolbar">' +
+          '<div class="editor-preview-modal__devices" id="demoModalDevices"></div>' +
+          '<button type="button" class="demo-modal__external" id="demoModalExternal" hidden aria-label="Open full preview in a new tab">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>' +
+            '<span>Full Preview</span>' +
+          '</button>' +
+        '</div>' +
+        '<div class="editor-preview-modal__frame-wrap" id="demoModalFrameWrap">' +
+          '<div class="device-frame device-frame--mobile" id="demoModalDeviceFrame">' +
+            '<div class="device-frame__notch" id="demoModalNotch"></div>' +
+            '<div class="device-frame__screen" id="demoModalScreen"></div>' +
+            '<div class="device-frame__home" id="demoModalHome" hidden></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="editor-preview-modal__footer" id="demoModalFooter" hidden>' +
+          '<div class="demo-modal__footer-actions">' +
+            '<button type="button" class="btn btn-gold" id="demoModalContinue">Choose This Design</button>' +
+            '<a href="#" target="_blank" rel="noopener" class="demo-modal__whatsapp" id="demoModalWhatsapp" hidden aria-label="Ask about this design on WhatsApp">' +
+              '<svg viewBox="0 0 32 32" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M16 3C9 3 3.3 8.7 3.3 15.7c0 2.5.7 4.8 1.9 6.8L3 29l6.7-2.1c1.9 1 4.1 1.6 6.3 1.6 7 0 12.7-5.7 12.7-12.7S23 3 16 3zm0 23.1c-2 0-3.9-.5-5.5-1.5l-.4-.2-4 1.2 1.2-3.9-.3-.4a10.3 10.3 0 0 1-1.6-5.6C5.4 9.8 10.2 5 16 5s10.6 4.8 10.6 10.7S21.9 26.1 16 26.1zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7.1a8.7 8.7 0 0 1-2.6-1.6 9.6 9.6 0 0 1-1.8-2.2c-.2-.3 0-.5.1-.7l.5-.6.3-.5c.1-.2 0-.4 0-.5s-.7-1.7-1-2.3-.6-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7c0 1.6 1.2 3.1 1.3 3.3s2.3 3.6 5.6 5c.8.3 1.4.5 1.9.7.8.2 1.5.2 2 .1.6-.1 1.9-.8 2.2-1.5s.3-1.4.2-1.5-.3-.2-.6-.4z"/></svg>' +
+            '</a>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(modal);
+    return modal;
+  }
+
+  (function initDemoModal() {
+    var modal = null;
+    var screenEl = null;
+    var demoTitle = 'Template';
+    var demoUrl = '';          // "Choose This Design" target (customize/select URL).
+    var demoIframeUrl = '';    // live-demo page URL — also what "Full Preview" opens.
+    // Built once per open, then reused across every device-tab switch
+    // (never reloaded/rebuilt — same "one real page, scaled" technique as
+    // invitation-editor.js's own live Preview modal).
+    var viewportEl = null;
+    var iframeEl = null;
+    var currentDevice = 'mobile';
+
+    // Sizes .device-frame__viewport to the real device's exact pixel
+    // dimensions, then shrinks (never enlarges — scale capped at 1) the
+    // whole box uniformly with one transform so it fits whatever visible
+    // area .device-frame__screen currently has — same technique/shape as
+    // invitation-editor.js's applyPreviewScale(). Nothing about the demo
+    // page's own CSS/fonts/images is ever touched, only this one wrapper.
+    function applyDemoScale() {
+      if (!viewportEl || !screenEl) return;
+      var dims = DEMO_DEVICE_DIMENSIONS[currentDevice] || DEMO_DEVICE_DIMENSIONS.mobile;
+      viewportEl.style.width = dims.width + 'px';
+      viewportEl.style.height = dims.height + 'px';
+      var availWidth = screenEl.clientWidth;
+      var availHeight = screenEl.clientHeight;
+      if (!availWidth || !availHeight) return;
+      var scale = Math.min(availWidth / dims.width, availHeight / dims.height, 1);
+      viewportEl.style.transform = 'translateX(-50%) scale(' + scale + ')';
+    }
+
+    function renderDevice(view) {
+      // Same iframe, same loaded page the whole time — only the frame
+      // bezel + scale change, never a reload (see applyDemoScale()).
+      currentDevice = view;
+      requestAnimationFrame(applyDemoScale);
+      setTimeout(applyDemoScale, 260); // once more after the frame's own width/height CSS transition settles.
+    }
+
+    function setDeviceFrame(view) {
+      var frame = modal.querySelector('#demoModalDeviceFrame');
+      var notch = modal.querySelector('#demoModalNotch');
+      var home = modal.querySelector('#demoModalHome');
+      var deviceKey = ( DEMO_VIEWS[view] || DEMO_VIEWS.mobile ).frame;
+      frame.className = 'device-frame device-frame--' + deviceKey;
+      if (notch) notch.hidden = ('mobile' !== deviceKey);
+      if (home) home.hidden = ('tablet' !== deviceKey);
+      modal.querySelectorAll('#demoModalDevices .editor-preview-device').forEach(function (btn) {
+        btn.classList.toggle('is-active', btn.dataset.device === view);
+      });
+      renderDevice(view);
+    }
+
+    // Recomputed on resize while the modal's open — same follow-up as
+    // invitation-editor.js's own resize listener for its Preview modal.
+    var demoScaleResizeTimer = null;
+    window.addEventListener('resize', function () {
+      if (!modal || !modal.classList.contains('is-open')) return;
+      clearTimeout(demoScaleResizeTimer);
+      demoScaleResizeTimer = setTimeout(applyDemoScale, 120);
+    });
+
+    function openModal(trigger) {
+      if (!modal) {
+        modal = buildDemoModal();
+        screenEl = modal.querySelector('#demoModalScreen');
+        modal.addEventListener('click', function (e) {
+          if (e.target.closest('[data-close]')) closeModal();
+          var deviceBtn = e.target.closest('#demoModalDevices [data-device]');
+          if (deviceBtn) setDeviceFrame(deviceBtn.dataset.device);
+          if (e.target.closest('#demoModalExternal') && demoIframeUrl) {
+            window.open(demoIframeUrl, '_blank', 'noopener');
+          }
+          if (e.target.closest('#demoModalContinue') && demoUrl) {
+            window.location.href = demoUrl;
+          }
+        });
+      }
+
+      viewportEl = null;
+      iframeEl = null;
+
+      demoIframeUrl = trigger.dataset.demoIframeUrl || '';
+      if (!demoIframeUrl) return; // the trigger shouldn't exist at all in this case — nothing to show.
+
+      // Tabs offered match the VIEWER's own screen, not the template's
+      // device — a visitor already on a phone has no use for a Tablet
+      // tab (and no room for a switcher at all below 480px); Full
+      // Preview (real browser tab, no popup chrome) stays available
+      // everywhere regardless.
+      var viewKeys = window.innerWidth < 480 ? ['mobile'] : ['mobile', 'tablet'];
+      screenEl.innerHTML = '';
+      viewportEl = document.createElement('div');
+      viewportEl.className = 'device-frame__viewport';
+      iframeEl = document.createElement('iframe');
+      iframeEl.title = (trigger.dataset.demoTitle || 'Template') + ' — live demo';
+      iframeEl.loading = 'lazy';
+      iframeEl.referrerPolicy = 'no-referrer-when-downgrade';
+      // ?embed=1 tells footer-invite-immersive.php to skip the "Demo
+      // Invitation" badge + Customize/WhatsApp CTA bar inside the small
+      // popup frame — it's redundant with this modal's own footer and
+      // was crowding/blocking the page in the cramped device frame.
+      // Full Preview (window.open below) deliberately omits it, since
+      // that's a real standalone visit where the CTA bar belongs.
+      iframeEl.src = demoIframeUrl + (demoIframeUrl.indexOf('?') > -1 ? '&' : '?') + 'embed=1';
+      viewportEl.appendChild(iframeEl);
+      screenEl.appendChild(viewportEl);
+
+      var devicesEl = modal.querySelector('#demoModalDevices');
+      devicesEl.innerHTML = deviceSwitcherHtml(viewKeys, viewKeys[0]);
+      // A single tab needs no switcher UI at all (a phone under 480px only
+      // ever offers "Mobile") — but the toolbar itself always stays up,
+      // since Full Preview must stay reachable even with the switcher hidden.
+      devicesEl.hidden = viewKeys.length < 2;
+      modal.querySelector('.editor-preview-modal__toolbar').hidden = false;
+
+      demoTitle = trigger.dataset.demoTitle || 'Template';
+      demoUrl = trigger.dataset.demoUrl || '';
+      var externalBtn = modal.querySelector('#demoModalExternal');
+      if (externalBtn) externalBtn.hidden = !demoIframeUrl;
+      var whatsappBtn = modal.querySelector('#demoModalWhatsapp');
+      if (whatsappBtn) {
+        var whatsappUrl = trigger.dataset.demoWhatsappUrl || '';
+        whatsappBtn.hidden = !whatsappUrl;
+        if (whatsappUrl) whatsappBtn.href = whatsappUrl;
+      }
+      var footer = modal.querySelector('#demoModalFooter');
+      if (footer) footer.hidden = !demoUrl;
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      trackEvent('template_demo_open', { template_title: demoTitle, template_url: demoUrl });
+      setDeviceFrame(viewKeys[0]);
+    }
+
+    function closeModal() {
+      if (!modal) return;
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      // A playing demo iframe page must never keep running (with audio)
+      // after the popup visually closes. Blanking
+      // its src first (not just discarding the element) guarantees the
+      // embedded page's own audio/video actually stops rather than
+      // lingering until garbage collection; then clearing the screen
+      // (not just hiding the modal via CSS) means the next open rebuilds
+      // fresh rather than resuming anything invisibly.
+      if (iframeEl) iframeEl.src = 'about:blank';
+      if (screenEl) screenEl.innerHTML = '';
+      viewportEl = null;
+      iframeEl = null;
+    }
+
+    document.addEventListener('click', function (e) {
+      var trigger = e.target.closest('[data-demo-trigger]');
+      if (!trigger) return;
+      e.preventDefault();
+      openModal(trigger);
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (!modal || !modal.classList.contains('is-open')) return;
+      if (e.key === 'Escape') closeModal();
+    });
+  })();
+
+  /* ---------------------------------------------------------------- */
+  /* Contact modal — every "Create My Invitation" / "Create Invitation"  */
+  /* CTA site-wide opens this in place instead of navigating to          */
+  /* /contact/ (its href still points there as a real fallback if JS     */
+  /* fails to load). Markup is server-rendered once into footer.php     */
+  /* (template-parts/contact-modal.php) since it embeds the actual      */
+  /* WPForms shortcode output — only open/close is handled here.         */
+  /* ---------------------------------------------------------------- */
+  (function initContactModal() {
+    var modal = document.getElementById('contactModal');
+    if (!modal) return;
+
+    function openModal() {
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    modal.addEventListener('click', function (e) {
+      if (e.target.closest('[data-close]')) closeModal();
+    });
+
+    document.addEventListener('click', function (e) {
+      var trigger = e.target.closest('[data-contact-modal-trigger]');
+      if (!trigger) return;
+      e.preventDefault();
+      openModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    });
+  })();
+
+  /* ---------------------------------------------------------------- */
+  /* Back to top                                                        */
+  /* ---------------------------------------------------------------- */
+  var backToTop = document.getElementById('backToTop');
+  if (backToTop) {
+    window.addEventListener('scroll', function () {
+      backToTop.classList.toggle('is-visible', window.scrollY > 600);
+    }, { passive: true });
+    backToTop.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Filter pill bar (category filtering on template listing pages)    */
+  /* ---------------------------------------------------------------- */
+  var filterBar = document.querySelector('.filter-bar');
+  if (filterBar) {
+    var filterTargets = document.querySelectorAll('[data-category]');
+    filterBar.querySelectorAll('.filter-pill').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        filterBar.querySelectorAll('.filter-pill').forEach(function (p) { p.classList.remove('is-active'); });
+        pill.classList.add('is-active');
+        var value = pill.dataset.filter;
+        filterTargets.forEach(function (el) {
+          var show = value === 'all' || el.dataset.category.split(' ').indexOf(value) !== -1;
+          el.style.display = show ? '' : 'none';
+        });
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Contact form — placeholder submit (no backend wired yet)          */
+  /* ---------------------------------------------------------------- */
+  var contactForm = document.querySelector('.contact-form');
+  if (contactForm) {
+    contactForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = contactForm.querySelector('button[type="submit"]');
+      var originalText = btn.textContent;
+      btn.textContent = 'Thank you! We will reach out shortly.';
+      btn.disabled = true;
+      setTimeout(function () {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        contactForm.reset();
+      }, 3000);
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Add to Calendar — reusable dropdown for every .add-to-calendar     */
+  /* (template-parts/add-to-calendar.php), on any guest-facing template.*/
+  /* Exposed as window.inviteutsavInitAddToCalendar(scope) so a template */
+  /* that injects its own markup dynamically after page load (wedding-01 */
+  /* renders ceremony cards via JS, not server-side PHP) can re-run this  */
+  /* against just the new markup instead of duplicating the interaction. */
+  /* ---------------------------------------------------------------- */
+  var calendarMenusOpen = [];
+  function closeAllCalendarMenus() {
+    calendarMenusOpen.forEach(function (w) {
+      var menu = w.querySelector('.add-to-calendar__menu');
+      var trigger = w.querySelector('.add-to-calendar__trigger');
+      if (menu) menu.hidden = true;
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function initAddToCalendar(scope) {
+    var root = scope || document;
+    root.querySelectorAll('[data-add-to-calendar]').forEach(function (widget) {
+      if (widget.dataset.calendarWired) return; // never wire the same widget twice
+      widget.dataset.calendarWired = '1';
+      calendarMenusOpen.push(widget);
+      var trigger = widget.querySelector('.add-to-calendar__trigger');
+      var menu = widget.querySelector('.add-to-calendar__menu');
+      if (!trigger || !menu) return;
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var willOpen = menu.hidden;
+        closeAllCalendarMenus();
+        menu.hidden = !willOpen;
+        trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      });
+    });
+  }
+  window.inviteutsavInitAddToCalendar = initAddToCalendar;
+  initAddToCalendar();
+  document.addEventListener('click', function () { closeAllCalendarMenus(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAllCalendarMenus(); });
+
+  /* ---------------------------------------------------------------- */
+  /* Three Hearts date reveal — the shared "Save the Date" mechanic for */
+  /* Vrindavan Prem, Anarkali Sage, Rangrez Vivaah and Riviera Romance   */
+  /* (template-parts/date-hearts.php): three heart buttons gently pulse */
+  /* until tapped; tapping one pops/beats that heart and reveals its    */
+  /* own value (Day, Month or Year) — each heart reveals independently, */
+  /* not all three together. Every animation frame lives in each        */
+  /* template's own CSS (its own heart color/size/font), so this only   */
+  /* ever toggles one class per heart on click — same "wire it once,    */
+  /* expose a re-run hook" shape as initAddToCalendar() just above, for */
+  /* any template that ever injects this markup after load instead of   */
+  /* server-rendering it.                                               */
+  /* ---------------------------------------------------------------- */
+  function initDateHearts(scope) {
+    var root = scope || document;
+    root.querySelectorAll('[data-date-hearts]').forEach(function (wrap) {
+      if (wrap.dataset.heartsWired) return; // never wire the same widget twice
+      wrap.dataset.heartsWired = '1';
+      wrap.querySelectorAll('.date-heart').forEach(function (heart) {
+        heart.addEventListener('click', function () {
+          if (heart.classList.contains('is-revealed')) return;
+          heart.classList.add('is-revealed');
+          heart.setAttribute('aria-pressed', 'true');
+        });
+      });
+    });
+  }
+  window.inviteutsavInitDateHearts = initDateHearts;
+  initDateHearts();
+
+  /* ---------------------------------------------------------------- */
+  /* Steps section — looping highlight (inviteutsav_step_list widget's   */
+  /* .steps/.step markup, used on Home and How It Works). Cycles one     */
+  /* .step active at a time via a class toggle; all the actual visual    */
+  /* work (scale/glow/transition) lives in CSS (style.css's .step rules) */
+  /* — this just drives which one has the class, on a plain interval,    */
+  /* independently per .steps group in case more than one exists on a    */
+  /* page. Skipped entirely under prefers-reduced-motion, per that       */
+  /* media query, rather than started and then neutralized in CSS —      */
+  /* nothing to disable if the interval never starts.                    */
+  /* ---------------------------------------------------------------- */
+  if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.querySelectorAll('.steps').forEach(function (group) {
+      var items = group.querySelectorAll(':scope > .step');
+      if (items.length < 2) return;
+      var active = 0;
+      function highlight(i) {
+        items.forEach(function (el, idx) { el.classList.toggle('is-step-active', idx === i); });
+      }
+      highlight(0);
+      setInterval(function () {
+        active = (active + 1) % items.length;
+        highlight(active);
+      }, 1350);
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Info tooltips (.info-tip — inviteutsav_info_tip() in               */
+  /* inc/template-tags.php): click/tap toggles it (also gives keyboard   */
+  /* users the same access a mouse user gets from hover), a real          */
+  /* mouseenter/mouseleave pair covers hover on desktop, and it closes    */
+  /* on outside click, Escape, scroll, or resize. Delegated to document   */
+  /* so it also picks up any .info-tip rendered later (e.g. a             */
+  /* dynamically-cloned editor repeater row).                             */
+  /*                                                                      */
+  /* Position is computed here, not in CSS, because a field's info-tip    */
+  /* can sit inside a scrollable modal or a card that clips overflow —    */
+  /* only a real getBoundingClientRect() measurement against the actual   */
+  /* viewport can guarantee the bubble never gets cut off: flip above the */
+  /* icon by default, drop below it instead if there isn't room above,   */
+  /* and clamp horizontally so it never runs past either viewport edge.   */
+  /* ---------------------------------------------------------------- */
+  function positionInfoTipBubble(tip) {
+    var trigger = tip.querySelector('.info-tip__trigger');
+    var bubble = tip.querySelector('.info-tip__bubble');
+    if (!trigger || !bubble) return;
+    var margin = 10;
+    var tRect = trigger.getBoundingClientRect();
+    var bRect = bubble.getBoundingClientRect();
+    var width = bRect.width || 260;
+    var height = bRect.height || 60;
+
+    var showAbove = (tRect.top - height - margin) > 0;
+    bubble.classList.toggle('info-tip__bubble--below', !showAbove);
+
+    var top = showAbove ? (tRect.top - height - margin) : (tRect.bottom + margin);
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+
+    var left = tRect.left + (tRect.width / 2) - (width / 2);
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+
+    bubble.style.top = top + 'px';
+    bubble.style.left = left + 'px';
+
+    var arrowLeft = (tRect.left + tRect.width / 2) - left;
+    arrowLeft = Math.max(12, Math.min(arrowLeft, width - 12));
+    bubble.style.setProperty('--info-tip-arrow-left', arrowLeft + 'px');
+  }
+  function showInfoTip(tip) {
+    closeAllInfoTips(tip);
+    positionInfoTipBubble(tip);
+    var bubble = tip.querySelector('.info-tip__bubble');
+    if (bubble) bubble.classList.add('is-shown');
+    var trigger = tip.querySelector('.info-tip__trigger');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+  }
+  function closeAllInfoTips(except) {
+    document.querySelectorAll('.info-tip__bubble.is-shown').forEach(function (bubble) {
+      var tip = bubble.closest('.info-tip');
+      if (tip === except) return;
+      bubble.classList.remove('is-shown', 'info-tip__bubble--below');
+      var trigger = tip && tip.querySelector('.info-tip__trigger');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest && e.target.closest('.info-tip__trigger');
+    if (!trigger) {
+      closeAllInfoTips();
+      return;
+    }
+    var tip = trigger.closest('.info-tip');
+    var bubble = tip.querySelector('.info-tip__bubble');
+    var willOpen = !bubble.classList.contains('is-shown');
+    if (willOpen) {
+      showInfoTip(tip);
+    } else {
+      closeAllInfoTips();
+    }
+  });
+  if (window.matchMedia && window.matchMedia('(hover:hover) and (pointer:fine)').matches) {
+    document.addEventListener('mouseover', function (e) {
+      var tip = e.target.closest && e.target.closest('.info-tip');
+      if (tip) showInfoTip(tip);
+    });
+    document.addEventListener('mouseout', function (e) {
+      var tip = e.target.closest && e.target.closest('.info-tip');
+      var toEl = e.relatedTarget;
+      if (tip && !(toEl && tip.contains(toEl))) closeAllInfoTips();
+    });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeAllInfoTips();
+  });
+  window.addEventListener('scroll', function () { closeAllInfoTips(); }, { passive: true, capture: true });
+  window.addEventListener('resize', function () { closeAllInfoTips(); }, { passive: true });
+
+  /* ------------------------------------------------------------------ */
+  /* WhatsApp RSVP — after a guest's RSVP saves successfully, offer to    */
+  /* send the same details on WhatsApp to one or two family contacts via  */
+  /* the plain wa.me deep link (no WhatsApp Business API, no background   */
+  /* sending — the guest still has to press Send inside WhatsApp).        */
+  /* Shared here (main.js loads before every per-template guest script)   */
+  /* so each of the 5 templates' own guest-form success handler calls     */
+  /* these two functions instead of duplicating the message/link logic.   */
+  /* ------------------------------------------------------------------ */
+  (function () {
+    function escapeWhatsappHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    window.inviteutsavBuildWhatsappRsvpMessage = function (opts) {
+      opts = opts || {};
+      var coupleNames = [opts.brideDisplayName, opts.groomDisplayName].filter(Boolean).join(' & ');
+      var lines = [
+        'Hello ' + (opts.contactName || '') + ',',
+        '',
+        'I have submitted my RSVP' + (coupleNames ? ' for ' + coupleNames : '') + '.',
+        '',
+        'Guest Name: ' + (opts.guestName || ''),
+        'Attending: ' + (opts.attending || 'Yes'),
+      ];
+      if (opts.message) {
+        lines.push('Message: ' + opts.message);
+      }
+      lines.push('', 'Looking forward to the celebration.');
+      return lines.join('\n');
+    };
+
+    // container: the (initially hidden) element to render buttons into.
+    // opts.contacts: [{ name, role, mobile, whatsapp_enabled }, ...] — the
+    // same array every template already builds for its static RSVP
+    // Contacts section, just also carrying the new whatsapp_enabled flag.
+    window.inviteutsavRenderWhatsappRsvpButtons = function (container, opts) {
+      if (!container) return;
+      opts = opts || {};
+      // Wedding invitations on the advanced RSVP form use the richer hand-off (primary organiser, full RSVP summary, automatic open).
+      if (window.InviteutsavRsvpAdv && window.InviteutsavRsvpAdv.renderWhatsapp && window.InviteutsavRsvpAdv.renderWhatsapp(container, opts)) return;
+
+      // Classic form on a wedding invitation whose owner chose an RSVP WhatsApp number: save first (already done by the caller), then open WhatsApp
+      // by itself with the guest's details, one field per line. The visible button is the fallback if the browser does not follow.
+      var wa = window.inviteutsavRsvpWa;
+      if (wa && wa.phone) {
+        var coupleName = wa.invitationName || [opts.brideDisplayName, opts.groomDisplayName].filter(Boolean).join(' & ');
+        var L = ['\uD83D\uDC8C *Wedding RSVP Confirmation*'];
+        var add = function (label, value) { if (value) { L.push('', '*' + label + ':* ' + value); } };
+        add('Invitation', coupleName);
+        add('Guest Name', opts.guestName);
+        add('Contact Number', opts.guestMobile);
+        add('Attendance', 'No' === opts.attending ? 'Not Attending' : 'Attending');
+        var gm = String(opts.message || '').replace(/\r\n?/g, '\n').trim();
+        if (gm) { L.push('', '*Guest Message:*', gm); }
+        var url = 'https://wa.me/' + String(wa.phone).replace(/\D/g, '') + '?text=' + encodeURIComponent(L.join('\n'));
+        container.innerHTML = '<a class="whatsapp-rsvp-btn" href="' + url + '" target="_blank" rel="noopener">Continue to WhatsApp</a>';
+        container.hidden = false;
+        if (container.getAttribute('data-wa-auto') !== '1') {
+          container.setAttribute('data-wa-auto', '1');
+          var mobileUa = /Android|iPhone|iPad|iPod|Mobile|IEMobile/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+          window.setTimeout(function () {
+            if (mobileUa) { window.location.href = url; return; }
+            var w = null; try { w = window.open(url, '_blank'); if (w) { w.opener = null; } } catch (e) { w = null; }
+            if (!w) { window.location.href = url; }
+          }, mobileUa ? 1400 : 150);
+        }
+        return;
+      }
+
+      var contacts = (opts.contacts || []).filter(function (c) {
+        return c && c.whatsapp_enabled && c.mobile;
+      });
+      if (!contacts.length) return; // RSVP already saved independently — nothing more to show.
+
+      var links = contacts.map(function (c) {
+        var message = window.inviteutsavBuildWhatsappRsvpMessage({
+          contactName: c.name,
+          brideDisplayName: opts.brideDisplayName,
+          groomDisplayName: opts.groomDisplayName,
+          guestName: opts.guestName,
+          attending: opts.attending,
+          message: opts.message,
+        });
+        return {
+          label: contacts.length > 1 ? 'Send to ' + (c.role || c.name) : 'Send RSVP on WhatsApp',
+          url: 'https://wa.me/' + c.mobile.replace(/\D/g, '') + '?text=' + encodeURIComponent(message),
+        };
+      });
+
+      container.innerHTML = links.map(function (link) {
+        return '<a class="whatsapp-rsvp-btn" href="' + link.url + '" target="_blank" rel="noopener">' + escapeWhatsappHtml(link.label) + '</a>';
+      }).join('');
+      container.hidden = false;
+
+      if ('auto' === opts.behavior && links[0]) {
+        window.open(links[0].url, '_blank');
+      }
+    };
+  })();
+})();

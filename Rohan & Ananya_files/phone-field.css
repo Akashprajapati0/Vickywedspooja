@@ -1,0 +1,117 @@
+/* ==========================================================================
+   InviteUtsav - shared phone field (country code + number).
+   ONE stylesheet for every place the component (template-parts/phone-field.php) appears: the invitation editor, RSVP forms, previews and
+   every published invitation design, present and future. It is loaded automatically wherever assets/js/phone-field.js is (see
+   inc/enqueue.php), so a new design needs no phone-field CSS of its own.
+
+   Layers
+   1. Layout and neutral look use :where() = zero specificity, so any design's own rules (Siyaram, Baby Shower, the editor...) still win.
+   2. The browser fixes below are deliberately stronger, because they are not design choices:
+        - Safari's native up/down chevrons (and every browser's own select chrome) are removed and one clean arrow is drawn instead;
+        - iOS Safari / touch browsers never auto-zoom: text in the field is at least 16px;
+        - the code list stays readable in dark designs (its popup uses its own light colours);
+        - long country names are cut with an ellipsis instead of breaking the row.
+   3. assets/js/phone-field.js copies the design's own look of the NUMBER box (border, radius, colours, padding, font, height) onto the
+      code box through the --pf-* variables below, so the two always match, whatever the design's input style is.
+   ========================================================================== */
+
+/* 1. Layout + neutral defaults (any design can override) */
+:where(.phone-field) {
+	display: grid;
+	grid-template-columns: minmax(5.25rem, 36%) minmax(0, 1fr);
+	gap: .5rem;
+	align-items: stretch;
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	text-align: left;
+}
+:where(.phone-field) .phone-field__error {
+	grid-column: 1 / -1;
+	margin: .1rem 0 0;
+	font-size: .85rem;
+	line-height: 1.35;
+	color: #b3261e;
+}
+:where(.phone-field) .phone-field__code,
+:where(.phone-field) .phone-field__number {
+	min-height: 2.75rem;
+	padding-top: .45rem;
+	padding-bottom: .45rem;
+	border: 1px solid rgba(0, 0, 0, .28);
+	border-radius: 10px;
+	background-color: #fff;
+	color: #1f1f1f;
+	font-family: inherit;
+	line-height: 1.25;
+}
+:where(.phone-field) .phone-field__code { padding-left: .7rem; }
+:where(.phone-field) .phone-field__number { padding-left: .8rem; padding-right: .8rem; }
+:where(.phone-field) .phone-field__code:focus-visible,
+:where(.phone-field) .phone-field__number:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* 2. Browser fixes (stronger than any design rule on purpose) */
+.phone-field select.phone-field__code {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	margin: 0 !important; /* spacing between the two boxes is the grid gap, never a design's label margin */
+	padding-right: 1.5rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+	/* the one drawn arrow: two gradients in the text colour, so it follows every theme (light or dark) */
+	background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%) !important;
+	background-position: calc(100% - .92rem) 50%, calc(100% - .6rem) 50% !important;
+	background-size: .34rem .34rem, .34rem .34rem !important;
+	background-repeat: no-repeat !important;
+}
+.phone-field select.phone-field__code::-ms-expand { display: none; }
+.phone-field select.phone-field__code option { color: #1f1f1f; background-color: #fff; }
+.phone-field input.phone-field__number {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	margin: 0 !important;
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* iPhone / iPad Safari (and any touch browser) zooms into a field whose text is under 16px: never go below it. */
+@media (hover: none) and (pointer: coarse) {
+	.phone-field select.phone-field__code,
+	.phone-field input.phone-field__number {
+		font-size: max(16px, 1em) !important;
+	}
+}
+
+/* Very narrow forms: a slightly narrower code box so the number keeps room on the same line */
+@media (max-width: 380px) {
+	:where(.phone-field) { grid-template-columns: minmax(4.4rem, 34%) minmax(0, 1fr); gap: .4rem; }
+}
+
+/* 3. The code box mirrors the number box of whatever design it sits in (set by assets/js/phone-field.js once it has measured it) */
+.phone-field[data-pf-mirrored] select.phone-field__code {
+	border-top: var(--pf-bt);
+	border-right: var(--pf-br);
+	border-bottom: var(--pf-bb);
+	border-left: var(--pf-bl);
+	border-radius: var(--pf-rad);
+	background-color: var(--pf-bg);
+	color: var(--pf-color);
+	font-family: var(--pf-ff);
+	font-size: var(--pf-fs);
+	font-weight: var(--pf-fw);
+	letter-spacing: var(--pf-ls);
+	padding-top: var(--pf-pt);
+	padding-bottom: var(--pf-pb);
+	padding-left: min(var(--pf-pl), .6rem);
+	min-height: var(--pf-h, 0);
+	height: var(--pf-h, auto); /* exactly the height of the number box */
+}

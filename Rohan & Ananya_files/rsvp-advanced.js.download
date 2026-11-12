@@ -1,0 +1,471 @@
+/*
+ * InviteUtsav — Advanced RSVP block (wedding invitations). Vanilla JS, no libraries.
+ *
+ * The block's markup is printed by template-parts/rsvp-advanced.php inside a wedding template's own RSVP form. This file:
+ *   - drives the block (accept/decline sections, adults/children counters with a live total, travel dates, accommodation);
+ *   - validates it before the host template submits (the server validates again and is the authority);
+ *   - lets the guest update their own earlier response through a secret edit token kept in their browser.
+ * Host templates call:
+ *   var adv = InviteutsavRsvpAdv.collect(form);   // null when the form has no advanced block; {ok:false} after showing errors
+ *   body = adv.merge(body);                        // adds attending, event_ids, adults, children, travel, ... and the edit token
+ *   InviteutsavRsvpAdv.done(form, response, successEl);
+ */
+(function () {
+  'use strict';
+
+  var cfg = window.inviteutsavRsvpAdv || {};
+  var S = cfg.strings || {};
+  var storeKey = 'iu_rsvp_' + (cfg.invitationId || '0');
+
+  function $(sel, scope) { return (scope || document).querySelector(sel); }
+  function $$(sel, scope) { return Array.prototype.slice.call((scope || document).querySelectorAll(sel)); }
+  function storeGet() { try { return window.localStorage.getItem(storeKey) || ''; } catch (e) { return ''; } }
+  function storeSet(v) { try { window.localStorage.setItem(storeKey, v); } catch (e) { /* storage unavailable */ } }
+
+  function showError(root, key, text) {
+    var el = $('[data-adv-error="' + key + '"]', root);
+    if (!el) { return; }
+    if (text) { el.textContent = text; }
+    el.hidden = false;
+  }
+  function clearErrors(root) {
+    $$('[data-adv-error]', root).forEach(function (e) { e.hidden = true; });
+    $$('.iu-adv__group', root).forEach(function (g) { g.classList.remove('is-invalid'); });
+  }
+  function checked(root, selector) { var n = $(selector + ':checked', root); return n ? n.value : ''; }
+  function attendingValue(root) {
+    var n = $('[data-adv="attendance"] input:checked', root);
+    return n ? n.value : 'yes';
+  }
+
+  /**
+   * Takes the block's look from the host template's own form (its text colour, input fill / outline / corner, font and the colour of its
+   * submit button), so the same block matches every wedding design without a per-template stylesheet.
+   */
+  // Any CSS colour (rgb, hex, oklch, named...) to [r,g,b,a] through a 1px canvas.
+  var rgbCtx = null;
+  function rgbaOf(color) {
+    try {
+      if (!rgbCtx) { var cv = document.createElement('canvas'); cv.width = cv.height = 1; rgbCtx = cv.getContext('2d', { willReadFrequently: true }); }
+      rgbCtx.clearRect(0, 0, 1, 1);
+      rgbCtx.fillStyle = '#000'; rgbCtx.fillStyle = color;
+      rgbCtx.fillRect(0, 0, 1, 1);
+      var d = rgbCtx.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2], d[3] / 255];
+    } catch (e) { return null; }
+  }
+  function toRgbString(color) { var v = rgbaOf(color); return v ? 'rgb(' + v[0] + ', ' + v[1] + ', ' + v[2] + ')' : color; }
+
+  function themeFromHost(root) {
+    var form = root.closest('form');
+    if (!form) { return; }
+    var transparent = /^(transparent|rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))$/;
+    // First fully opaque colour in a gradient / background list (skips the translucent white shine many buttons layer on top).
+    var firstColour = function (s) {
+      var all = (s || '').match(/rgba?\([^)]*\)|#[0-9a-f]{6}\b|#[0-9a-f]{3}\b/ig) || [];
+      for (var i = 0; i < all.length; i++) {
+        var m = /rgba\((\d+)[ ,]+(\d+)[ ,]+(\d+)[ ,]+([\d.]+)\)/.exec(all[i]);
+        if (m && parseFloat(m[4]) < 0.9) { continue; }
+        return all[i];
+      }
+      return '';
+    };
+    var input = $('input[type="text"]:not(.invite-honeypot), input[type="tel"], textarea', form);
+    var btn = $('button[type="submit"]', form);
+    var label = $('label', form);
+    var ic = input ? getComputedStyle(input) : null;
+    var bc = btn ? getComputedStyle(btn) : null;
+    var text = (label && getComputedStyle(label).color) || getComputedStyle(form).color;
+    text = toRgbString(text);
+    root.style.color = text;
+    if (ic && ic.fontFamily) { root.style.fontFamily = ic.fontFamily; }
+    var accent = '';
+    if (bc) {
+      accent = !transparent.test(bc.backgroundColor) ? bc.backgroundColor : firstColour(bc.backgroundImage);
+      if (!accent && parseFloat(bc.borderTopWidth) > 0 && !transparent.test(bc.borderTopColor)) { accent = bc.borderTopColor; }
+    }
+    // A near-white button (cream / glass styles) would make the "selected" state invisible: use the text colour instead.
+    var lm = /rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(accent ? toRgbString(accent) : '');
+    if (!accent || (lm && (0.299 * lm[1] + 0.587 * lm[2] + 0.114 * lm[3]) / 255 > 0.86)) { accent = text; }
+    accent = toRgbString(accent);
+    root.style.setProperty('--iu-adv-accent', accent);
+    if (bc && bc.color && !transparent.test(bc.backgroundColor + '')) { root.style.setProperty('--iu-adv-on', bc.color); }
+    else if (bc) { root.style.setProperty('--iu-adv-on', '#fff'); }
+    // Light-on-accent text must stay readable whichever side of the contrast line the accent falls on.
+    var rgb = /rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(accent);
+    if (rgb) {
+      var lum = (0.299 * rgb[1] + 0.587 * rgb[2] + 0.114 * rgb[3]) / 255;
+      root.style.setProperty('--iu-adv-on', lum > 0.62 ? '#1a1a1a' : '#ffffff');
+    }
+    var t = /rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(text);
+    if (t) {
+      root.style.setProperty('--iu-adv-line', 'rgba(' + t[1] + ',' + t[2] + ',' + t[3] + ',.38)');
+      root.style.setProperty('--iu-adv-muted', 'rgba(' + t[1] + ',' + t[2] + ',' + t[3] + ',.7)');
+      root.style.setProperty('--iu-adv-bg', 'rgba(' + t[1] + ',' + t[2] + ',' + t[3] + ',.05)');
+    }
+    if (ic && !transparent.test(ic.backgroundColor)) { root.style.setProperty('--iu-adv-field-bg', ic.backgroundColor); }
+  }
+
+  function initRoot(root) {
+    themeFromHost(root);
+    var accept = $('[data-adv-accept]', root);
+
+    // Accept / decline: a regretful reply hides every other question (the message box of the host form stays).
+    function syncAttendance() {
+      var yes = attendingValue(root) === 'yes';
+      if (accept) { accept.hidden = !yes; }
+    }
+    $$('[data-adv="attendance"] input', root).forEach(function (i) { i.addEventListener('change', function () { clearErrors(root); syncAttendance(); }); });
+    syncAttendance();
+
+    // Counters.
+    var guests = $('[data-adv="guests"]', root);
+    if (guests) {
+      var maxA = parseInt(guests.getAttribute('data-max-adults'), 10) || 10;
+      var maxC = parseInt(guests.getAttribute('data-max-children'), 10) || 10;
+      var totalEl = $('[data-total]', guests);
+      var counters = $$('[data-counter]', guests);
+      var refresh = function () {
+        var a = 0; var c = 0;
+        counters.forEach(function (box) {
+          var out = $('[data-count]', box);
+          var v = parseInt(out.textContent, 10) || 0;
+          var min = parseInt(box.getAttribute('data-min'), 10) || 0;
+          var max = box.getAttribute('data-counter') === 'adults' ? maxA : maxC;
+          v = Math.max(min, Math.min(max, v));
+          out.textContent = String(v);
+          if (box.getAttribute('data-counter') === 'adults') { a = v; } else { c = v; }
+          $$('[data-step]', box).forEach(function (b) {
+            var dir = parseInt(b.getAttribute('data-step'), 10);
+            b.disabled = dir < 0 ? v <= min : v >= max;
+          });
+        });
+        if (totalEl) { totalEl.textContent = String(a + c); }
+      };
+      counters.forEach(function (box) {
+        $$('[data-step]', box).forEach(function (b) {
+          b.addEventListener('click', function () {
+            var out = $('[data-count]', box);
+            out.textContent = String((parseInt(out.textContent, 10) || 0) + parseInt(b.getAttribute('data-step'), 10));
+            refresh();
+          });
+        });
+      });
+      refresh();
+      guests.__refresh = refresh;
+    }
+
+    // Travel: the date pickers only appear for "Yes"; departure can never be set before arrival.
+    var travel = $('[data-adv="travel"]', root);
+    if (travel) {
+      var dates = $('[data-adv-travel]', travel);
+      var arr = $('[data-adv-arrival]', travel);
+      var dep = $('[data-adv-departure]', travel);
+      var syncTravel = function () { if (dates) { dates.hidden = checked(travel, 'input[type="radio"]') !== 'yes'; } };
+      $$('input[type="radio"]', travel).forEach(function (i) { i.addEventListener('change', syncTravel); });
+      syncTravel();
+      if (arr && dep) {
+        arr.addEventListener('change', function () { dep.min = arr.value || ''; var e = $('[data-adv-error="dates"]', root); if (e) { e.hidden = true; } });
+        dep.addEventListener('change', function () { var e = $('[data-adv-error="dates"]', root); if (e) { e.hidden = true; } });
+      }
+    }
+
+    // Accommodation notes only for "Yes".
+    var acc = $('[data-adv="accommodation"]', root);
+    if (acc) {
+      var box = $('[data-adv-acc]', acc);
+      var syncAcc = function () { if (box) { box.hidden = checked(acc, 'input[type="radio"]') !== 'yes'; } };
+      $$('input[type="radio"]', acc).forEach(function (i) { i.addEventListener('change', syncAcc); });
+      syncAcc();
+    }
+
+    // Selecting a ceremony clears its error.
+    $$('[data-adv="events"] input', root).forEach(function (i) { i.addEventListener('change', function () { var e = $('[data-adv-error="events"]', root); if (e) { e.hidden = true; } }); });
+  }
+
+  /** Reads and validates one form's block. */
+    // Required guest message: mark the host template's own label with the same asterisk the other required fields carry.
+    function markMessageRequired() {
+      if (!cfg.reqMessage) { return; }
+      $$('[data-iu-adv]').forEach(function (root) {
+        var form = root.closest('form'); if (!form) { return; }
+        var box = $$('textarea', form).filter(function (t) { return !root.contains(t); })[0];
+        if (!box || box.getAttribute('data-iu-req-marked')) { return; }
+        box.setAttribute('data-iu-req-marked', '1');
+        var lab = box.id ? form.querySelector('label[for="' + box.id + '"]') : null;
+        if (lab) { var em = document.createElement('em'); em.className = 'iu-adv__req'; em.setAttribute('aria-hidden', 'true'); em.textContent = ' *'; lab.appendChild(em); }
+      });
+    }
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', markMessageRequired); } else { markMessageRequired(); }
+  function collect(form) {
+    var root = $('[data-iu-adv]', form);
+    if (!root) { return null; }
+    clearErrors(root);
+    var f = {};
+    var firstBad = null;
+    var bad = function (el) { if (!firstBad) { firstBad = el; } };
+
+    f.attending = attendingValue(root);
+    var suffix = '';
+    var mealLabel = '';
+    var questionPairs = [];
+
+    if (f.attending === 'yes') {
+      var ev = $('[data-adv="events"]', root);
+      if (ev) {
+        f.event_ids = $$('input:checked', ev).map(function (i) { return i.value; });
+        if (!f.event_ids.length && ev.getAttribute('data-required')) { showError(root, 'events'); ev.classList.add('is-invalid'); bad(ev); }
+      }
+      var guests = $('[data-adv="guests"]', root);
+      if (guests) {
+        f.adults = parseInt($('[data-counter="adults"] [data-count]', guests).textContent, 10) || 1;
+        var childBox = $('[data-counter="children"] [data-count]', guests); // absent when Children is switched off
+        f.children = childBox ? (parseInt(childBox.textContent, 10) || 0) : 0;
+        api.hasChildren = !!childBox;
+      }
+      var travel = $('[data-adv="travel"]', root);
+      if (travel) {
+        f.travelling = checked(travel, 'input[type="radio"]');
+        if (!f.travelling && travel.getAttribute('data-required')) { showError(root, 'travel'); travel.classList.add('is-invalid'); bad(travel); }
+        var arr = $('[data-adv-arrival]', travel); var dep = $('[data-adv-departure]', travel);
+        // Date fields exist only for the dates the owner switched on; a field that is not shown is never read or required.
+        if (f.travelling === 'yes' && (arr || dep)) {
+          f.arrival_date = arr ? (arr.value || '') : ''; f.departure_date = dep ? (dep.value || '') : '';
+          if (arr && arr.required && !f.arrival_date) {
+            showError(root, 'dates', S.arrivalRequired || 'Please enter your arrival date.'); bad(arr);
+          } else if (dep && dep.required && !f.departure_date) {
+            showError(root, 'dates', S.departureRequired || 'Please enter your departure date.'); bad(dep);
+          } else if (f.arrival_date && f.departure_date && f.departure_date < f.arrival_date) {
+            showError(root, 'dates', S.datesOrder || 'The departure date cannot be earlier than the arrival date.'); bad(dep);
+          }
+        }
+      }
+      var acc = $('[data-adv="accommodation"]', root);
+      if (acc) {
+        f.accommodation = checked(acc, 'input[type="radio"]');
+        if (!f.accommodation && acc.getAttribute('data-required')) { showError(root, 'accommodation'); acc.classList.add('is-invalid'); bad(acc); }
+        if (f.accommodation === 'yes') { var n = $('[data-adv-acc-notes]', acc); f.accommodation_notes = n ? n.value.trim() : ''; }
+      }
+      var meal = $('[data-adv-meal]', root);
+      var mealGroup = $('[data-adv="meal"]', root);
+      if (meal && !meal.value && mealGroup && mealGroup.getAttribute('data-required')) { showError(root, 'meal'); mealGroup.classList.add('is-invalid'); bad(mealGroup); }
+      if (meal) { f.meal_preference = meal.value; mealLabel = meal.value ? meal.options[meal.selectedIndex].text : ''; }
+
+      // Owner-defined custom questions travel inside the message (as the classic form always did).
+      var answers = [];
+      questionPairs = [];
+      $$('[data-adv="question"]', root).forEach(function (q) {
+        var sel = $('[data-adv-qselect]', q);
+        var picked = sel ? (sel.value ? [sel.value] : []) : $$('[data-adv-qopt]:checked', q).map(function (i) { return i.value; });
+        if (picked.length) { answers.push(q.getAttribute('data-question') + ' ' + picked.join(', ')); questionPairs.push({ q: String(q.getAttribute('data-question') || '').replace(/[?:\s]+$/, ''), a: picked.join(', ') }); }
+      });
+      suffix = answers.join(' · ');
+    }
+
+    // Required guest message: the box belongs to the host template's own form, so it is found by being the form's textarea outside this block.
+    if (cfg.reqMessage) {
+      var msgBox = $$('textarea', form).filter(function (t) { return !root.contains(t); })[0];
+      if (msgBox) {
+        if (!msgBox.getAttribute('aria-required')) {
+          msgBox.setAttribute('aria-required', 'true');
+          var note = document.createElement('p'); note.className = 'iu-adv__error'; note.setAttribute('data-adv-msg-error', ''); note.hidden = true;
+          note.textContent = S.messageRequired || 'Please write a short message.';
+          msgBox.parentNode.insertBefore(note, msgBox.nextSibling);
+        }
+        var mErr = msgBox.parentNode.querySelector('[data-adv-msg-error]');
+        if (mErr) { mErr.hidden = true; }
+        if (!msgBox.value.trim()) { if (mErr) { mErr.hidden = false; } bad(msgBox); }
+      }
+    }
+
+    if (firstBad) {
+      try { firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* old browser */ }
+      var focus = firstBad.matches && firstBad.matches('input,select,textarea') ? firstBad : $('input,select,textarea', firstBad);
+      if (focus && focus.focus) { try { focus.focus({ preventScroll: true }); } catch (e2) { focus.focus(); } }
+      return { ok: false };
+    }
+
+    f.form_token = cfg.formToken || '';
+    f.edit_token = storeGet();
+    return {
+      ok: true,
+      fields: f,
+      suffix: suffix,
+      merge: function (body) {
+        Object.keys(f).forEach(function (k) { body[k] = f[k]; });
+        if (suffix) { body.message = [body.message, suffix].filter(Boolean).join(body.message ? ' — ' : ''); }
+        api.last = { body: body, mealLabel: mealLabel, questions: questionPairs, editToken: '' }; // read by the WhatsApp hand-off once the server has saved the RSVP
+        return body;
+      }
+    };
+  }
+
+  /** After the server accepted a response: remember the edit token and add the accommodation notice to the success panel. */
+  function done(form, resp, successEl) {
+    var root = $('[data-iu-adv]', form);
+    if (!root) { return; }
+    if (resp && resp.edit_token) { storeSet(resp.edit_token); }
+    if (api.last) { api.last.editToken = (resp && resp.edit_token) || storeGet(); api.last.mode = resp && resp.mode; }
+    root.hidden = true; // the host template shows its own thank-you panel
+    if (successEl) {
+      $$('.iu-adv__ack', successEl).forEach(function (n) { n.remove(); });
+      var acc = $('[data-adv="accommodation"]', root);
+      if (resp && resp.attending === 'yes' && acc && checked(acc, 'input[type="radio"]') === 'yes') {
+        var p = document.createElement('p');
+        p.className = 'iu-adv__ack';
+        p.textContent = S.accommodationAck || 'Your accommodation request has been noted. Arrangements are subject to confirmation by the hosts.';
+        successEl.appendChild(p);
+      }
+    }
+  }
+
+  /** Let a returning guest correct their earlier response. */
+  function prefill(form) {
+    var root = $('[data-iu-adv]', form);
+    var token = storeGet();
+    if (!root || !token || !cfg.lookupUrl) { return; }
+    fetch(cfg.lookupUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit_token: token }) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.success || !d.rsvp) { return; }
+        var r = d.rsvp;
+        var setRadio = function (scope, value) { $$('input[type="radio"]', scope).forEach(function (i) { i.checked = i.value === value; i.dispatchEvent(new Event('change', { bubbles: true })); }); };
+        var att = $('[data-adv="attendance"]', root); if (att) { setRadio(att, r.attending); }
+        $$('[data-adv="events"] input', root).forEach(function (i) { i.checked = (r.event_ids || []).indexOf(i.value) > -1; });
+        $$('[data-adv="events"] input', root).slice(0, 1).forEach(function (i) { i.dispatchEvent(new Event('change', { bubbles: true })); }); // tells the hotel list which events are ticked
+        var guests = $('[data-adv="guests"]', root);
+        if (guests) {
+          $('[data-counter="adults"] [data-count]', guests).textContent = String(r.adults || 1);
+          var childOut = $('[data-counter="children"] [data-count]', guests);
+          if (childOut) { childOut.textContent = String(r.children || 0); }
+          if (guests.__refresh) { guests.__refresh(); }
+        }
+        var travel = $('[data-adv="travel"]', root);
+        if (travel && r.travelling) { setRadio(travel, r.travelling); }
+        var arr = $('[data-adv-arrival]', root); var dep = $('[data-adv-departure]', root);
+        if (arr && r.arrival_date) { arr.value = r.arrival_date; if (dep) { dep.min = r.arrival_date; } }
+        if (dep && r.departure_date) { dep.value = r.departure_date; }
+        var acc = $('[data-adv="accommodation"]', root);
+        if (acc && r.accommodation) { setRadio(acc, r.accommodation); }
+        var notes = $('[data-adv-acc-notes]', root); if (notes && r.accommodation_notes) { notes.value = r.accommodation_notes; }
+        var meal = $('[data-adv-meal]', root); if (meal && r.meal_preference) { meal.value = r.meal_preference; }
+        // The host template's own name / phone / message inputs.
+        var name = $('input[autocomplete="name"]', form) || $('input[type="text"]:not(.invite-honeypot)', form);
+        if (name && !name.value) { name.value = r.guest_name || ''; }
+        var wrap = $('[data-phone-field]', form);
+        if (wrap && window.InviteutsavPhone && r.guest_mobile) { window.InviteutsavPhone.populate(wrap, r.guest_mobile); }
+        var note = $('textarea:not([data-adv-acc-notes])', form);
+        if (note && !note.value && r.message) { note.value = r.message; }
+        var banner = $('[data-adv-edit-note]', root); if (banner) { banner.hidden = false; }
+      })
+      .catch(function () { /* the form simply stays blank */ });
+  }
+
+  function boot() {
+    $$('[data-iu-adv]').forEach(initRoot);
+    $$('form').forEach(function (f) { if ($('[data-iu-adv]', f)) { prefill(f); } });
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
+  // The host template's stylesheet can finish after DOMContentLoaded: take its colours again once everything has loaded.
+  var retheme = function () { $$('[data-iu-adv]').forEach(themeFromHost); };
+  if (document.readyState === 'complete') { retheme(); } else { window.addEventListener('load', retheme); }
+  [400, 1500, 4000].forEach(function (ms) { window.setTimeout(retheme, ms); });
+  document.addEventListener('focusin', function (e) { if (e.target && e.target.closest && e.target.closest('[data-iu-adv]')) { retheme(); } }, { once: true });
+
+  /* ---------------------------------------------------------------- */
+  /* WhatsApp hand-off (after the RSVP is saved)                       */
+  /* ---------------------------------------------------------------- */
+  var E = {
+    mail: '\uD83D\uDC8C', ring: '\uD83D\uDC8D', person: '\uD83D\uDC64', phone: '\uD83D\uDCDE', check: '\u2705', family: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67', baby: '\uD83D\uDC76',
+    party: '\uD83C\uDF89', cal: '\uD83D\uDCC5', bed: '\uD83C\uDFE8', meal: '\uD83C\uDF7D\uFE0F', chat: '\uD83D\uDCAC'
+  };
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function longDate(d) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ''); return m ? (parseInt(m[3], 10) + ' ' + MONTHS[parseInt(m[2], 10) - 1] + ' ' + m[1]) : ''; }
+  function shownPhone(p) { p = String(p || ''); return /^\+91\d{10}$/.test(p) ? p.slice(3) : p; }
+
+  /**
+   * The message the guest sends to the organiser: every field on its own line (a blank line between fields), every selected event on its own
+   * line, only the parts of the RSVP that apply. English always.
+   */
+  function buildWhatsappMessage(last) {
+    var b = last.body || {};
+    var yes = b.attending !== 'no';
+    var names = {};
+    (cfg.events || []).forEach(function (e) { names[e.id] = e.name; });
+    var L = [E.mail + ' *Wedding RSVP Confirmation*'];
+    var add = function (label, value) { if (value !== '' && value !== null && value !== undefined) { L.push('', '*' + label + ':* ' + value); } };
+    add('Invitation', cfg.invitationName || '');
+    add('Guest Name', b.guest_name || '');
+    add('Contact Number', b.guest_mobile || '');
+    add('Attendance', yes ? 'Attending' : 'Not Attending');
+    if (yes && b.adults) {
+      add('Number of Adults', b.adults);
+      if (api.hasChildren !== false) { add('Number of Children', b.children || 0); }
+      add('Total Guests', b.adults + (b.children || 0));
+    }
+    if (yes && b.event_ids && b.event_ids.length) {
+      var evs = [];
+      b.event_ids.forEach(function (id) { if (names[id]) { evs.push('\u2022 ' + names[id]); } });
+      if (evs.length) { L.push('', '*Events Attending:*'); Array.prototype.push.apply(L, evs); }
+    }
+    (last.questions || []).forEach(function (qa) { add(qa.q, qa.a); });
+    if (yes && b.travelling === 'yes') {
+      add('Arrival', longDate(b.arrival_date));
+      add('Departure', longDate(b.departure_date));
+    }
+    if (yes && b.accommodation === 'yes') { add('Accommodation', 'Requested' + (b.accommodation_notes ? ' (' + b.accommodation_notes + ')' : '') + ' - subject to host confirmation'); }
+    if (yes && last.mealLabel) { add('Meal Preference', last.mealLabel); }
+    var msg = String(b.message || '').replace(/\r\n?/g, '\n').trim();
+    if (msg) { L.push('', '*Guest Message:*', msg); } // the guest's own line breaks stay
+    return L.join('\n');
+  }
+  function markOpened(last) {
+    var token = last && last.editToken;
+    if (!token || !cfg.whatsappUrl || last.marked) { return; }
+    last.marked = true;
+    try { fetch(cfg.whatsappUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit_token: token }), keepalive: true }); } catch (e) { /* the RSVP itself is already saved */ }
+  }
+
+  /**
+   * Renders "Continue to WhatsApp" (primary organiser first, others as alternatives) into the template's own hidden container and opens WhatsApp
+   * once, automatically. Returns true when it handled the hand-off, so the older per-contact buttons are skipped.
+   */
+  function renderWhatsapp(container, opts) {
+    var last = api.last;
+    var contacts = cfg.whatsapp || [];
+    if (!container || !last || !contacts.length || !last.body) { return false; }
+    var msg = buildWhatsappMessage(last);
+    var links = contacts.map(function (c, i) {
+      return { label: i === 0 ? (S.waContinue || 'Continue to WhatsApp') : ((S.waSendTo || 'Send to') + ' ' + (c.role || c.name)), url: 'https://wa.me/' + c.phone + '?text=' + encodeURIComponent(msg) };
+    });
+    container.innerHTML = '';
+    var note = document.createElement('p'); note.className = 'iu-adv__wa-note'; note.textContent = S.waSaved || 'Your RSVP has been saved successfully. Continue to WhatsApp to send your confirmation to the organizer.';
+    container.appendChild(note);
+    links.forEach(function (l, i) {
+      var a = document.createElement('a');
+      a.className = 'whatsapp-rsvp-btn iu-adv__wa-btn' + (i ? ' iu-adv__wa-btn--alt' : '');
+      a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = l.label;
+      a.addEventListener('click', function () { markOpened(last); });
+      container.appendChild(a);
+    });
+    container.hidden = false;
+    if (container.getAttribute('data-wa-auto') === '1') { return true; } // never open WhatsApp twice for one submission
+    container.setAttribute('data-wa-auto', '1');
+    var mobile = /Android|iPhone|iPad|iPod|Mobile|IEMobile/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+    window.setTimeout(function () {
+      markOpened(last);
+      if (mobile) { window.location.href = links[0].url; return; }
+      // Desktop: a new tab (WhatsApp Web / the app). A browser may block a tab opened after the save finished; then the guest is taken there in
+      // this tab instead, so the hand-off still always happens (the visible button stays as a last fallback).
+      // (window.open with the "noopener" feature always returns null, which would look like a block - so open normally and cut the link after.)
+      var w = null; try { w = window.open(links[0].url, '_blank'); if (w) { w.opener = null; } } catch (e) { w = null; }
+      if (!w) { window.location.href = links[0].url; }
+    }, mobile ? 1400 : 150);
+    return true;
+  }
+
+  var api = window.InviteutsavRsvpAdv = {
+    collect: collect, done: done, renderWhatsapp: renderWhatsapp, last: null,
+    label: function (fallback) { return (cfg.strings && cfg.strings.submitLabel) || fallback; }
+  };
+})();
